@@ -7,15 +7,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from auth import jwt_bearer
-from db import device_groups_table
+from db import devices_table
 from iot_client import IoTClientError, get_shadow, list_things, update_desired
 
 router = APIRouter(prefix="/api", tags=["devices"])
 
 
 def _assert_device_access(thing_name: str, group_id: str) -> None:
-    item = device_groups_table().get_item(Key={"thing_name": thing_name}).get("Item")
-    if not item or item.get("group_id") != group_id:
+    # thing_name format: "group_id:dev_id"
+    parts = thing_name.split(":", 1)
+    if len(parts) != 2 or parts[0] != group_id:
+        raise HTTPException(status_code=403, detail="Device not in your group")
+    dev_id = parts[1]
+    item = devices_table().get_item(
+        Key={"group_id": group_id, "dev_id": dev_id}
+    ).get("Item")
+    if not item:
         raise HTTPException(status_code=403, detail="Device not in your group")
 
 
@@ -28,8 +35,7 @@ def _wrap(fn, *args, **kwargs):
 
 @router.get("/devices")
 def list_devices(group_id: str = Depends(jwt_bearer)) -> dict[str, Any]:
-    resp = device_groups_table().query(
-        IndexName="group_id-index",
+    resp = devices_table().query(
         KeyConditionExpression=Key("group_id").eq(group_id),
     )
     thing_names = {item["thing_name"] for item in resp.get("Items", [])}

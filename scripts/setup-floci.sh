@@ -15,46 +15,40 @@ $AWS dynamodb create-table \
   --billing-mode PAY_PER_REQUEST \
   2>/dev/null && echo "Created: Groups" || echo "Exists:  Groups"
 
-# DeviceGroups  (GSI: group_id-index)
+# Devices  (PK: group_id, SK: dev_id, GSI: api_key-index)
 $AWS dynamodb create-table \
-  --table-name DeviceGroups \
+  --table-name Devices \
   --attribute-definitions \
-    AttributeName=thing_name,AttributeType=S \
     AttributeName=group_id,AttributeType=S \
-  --key-schema AttributeName=thing_name,KeyType=HASH \
+    AttributeName=dev_id,AttributeType=S \
+    AttributeName=api_key,AttributeType=S \
+  --key-schema \
+    AttributeName=group_id,KeyType=HASH \
+    AttributeName=dev_id,KeyType=RANGE \
   --global-secondary-indexes '[
     {
-      "IndexName": "group_id-index",
-      "KeySchema": [{"AttributeName":"group_id","KeyType":"HASH"}],
+      "IndexName": "api_key-index",
+      "KeySchema": [{"AttributeName":"api_key","KeyType":"HASH"}],
       "Projection": {"ProjectionType":"ALL"}
     }
   ]' \
   --billing-mode PAY_PER_REQUEST \
-  2>/dev/null && echo "Created: DeviceGroups" || echo "Exists:  DeviceGroups"
+  2>/dev/null && echo "Created: Devices" || echo "Exists:  Devices"
 
-# Commands  (GSI: thing_name-created-index, TTL on ttl attribute)
+# Tasks  (PK: device_pk = group_id#dev_id, SK: task_id = ISO timestamp, TTL on ttl)
 $AWS dynamodb create-table \
-  --table-name Commands \
+  --table-name Tasks \
   --attribute-definitions \
-    AttributeName=command_id,AttributeType=S \
-    AttributeName=thing_name,AttributeType=S \
-    AttributeName=created_at,AttributeType=S \
-  --key-schema AttributeName=command_id,KeyType=HASH \
-  --global-secondary-indexes '[
-    {
-      "IndexName": "thing_name-created-index",
-      "KeySchema": [
-        {"AttributeName":"thing_name","KeyType":"HASH"},
-        {"AttributeName":"created_at","KeyType":"RANGE"}
-      ],
-      "Projection": {"ProjectionType":"ALL"}
-    }
-  ]' \
+    AttributeName=device_pk,AttributeType=S \
+    AttributeName=task_id,AttributeType=S \
+  --key-schema \
+    AttributeName=device_pk,KeyType=HASH \
+    AttributeName=task_id,KeyType=RANGE \
   --billing-mode PAY_PER_REQUEST \
-  2>/dev/null && echo "Created: Commands" || echo "Exists:  Commands"
+  2>/dev/null && echo "Created: Tasks" || echo "Exists:  Tasks"
 
 $AWS dynamodb update-time-to-live \
-  --table-name Commands \
+  --table-name Tasks \
   --time-to-live-specification "Enabled=true,AttributeName=ttl" \
   2>/dev/null || true
 

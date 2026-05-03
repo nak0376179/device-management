@@ -3,15 +3,19 @@
 # Requires: aws cli (configured), jq, curl.
 set -euo pipefail
 
-THING_NAME="${1:-virtual-device-01}"
+THING_NAME="${1:-dev-group:deadbeef0101}"  # format: group_id:mac_address
 REGION="${AWS_REGION:-ap-northeast-1}"
-POLICY_NAME="${THING_NAME}-policy"
+# Policy names and MQTT client IDs must not contain ':'; replace with '-'
+SAFE_NAME="${THING_NAME//:/-}"
+POLICY_NAME="${SAFE_NAME}-policy"
+CLIENT_ID="${SAFE_NAME}"
 CERT_DIR="./certs"
 
 mkdir -p "$CERT_DIR"
 
 echo "Region:      $REGION"
 echo "Thing name:  $THING_NAME"
+echo "Client ID:   $CLIENT_ID"
 echo "Policy name: $POLICY_NAME"
 
 ENDPOINT=$(aws iot describe-endpoint \
@@ -57,7 +61,7 @@ POLICY_DOC=$(cat <<EOF
     {
       "Effect": "Allow",
       "Action": ["iot:Connect"],
-      "Resource": "arn:aws:iot:${REGION}:*:client/${THING_NAME}"
+      "Resource": "arn:aws:iot:${REGION}:*:client/${CLIENT_ID}"
     },
     {
       "Effect": "Allow",
@@ -113,7 +117,7 @@ aws iot attach-thing-principal \
 cat > config.json <<EOF
 {
   "endpoint": "${ENDPOINT}",
-  "client_id": "${THING_NAME}",
+  "client_id": "${CLIENT_ID}",
   "thing_name": "${THING_NAME}",
   "cert_path": "./certs/device.cert.pem",
   "key_path": "./certs/device.private.key",

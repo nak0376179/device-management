@@ -1,4 +1,4 @@
-import type { Command, Device, ShadowDocument } from './types';
+import type { Device, Task } from './types';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -45,44 +45,13 @@ export function listDevices(): Promise<{ devices: Device[] }> {
   return http('/devices');
 }
 
-export function getShadow(thingName: string): Promise<ShadowDocument> {
-  return http(`/devices/${encodeURIComponent(thingName)}/shadow`);
-}
-
-export function setInterfaceEnabled(
-  thingName: string,
-  iface: string,
-  enabled: boolean,
-): Promise<ShadowDocument> {
-  const action = enabled ? 'enable' : 'disable';
-  return http(
-    `/devices/${encodeURIComponent(thingName)}/interfaces/${encodeURIComponent(iface)}/${action}`,
-    { method: 'POST' },
-  );
-}
-
-export function setInterfaceDescription(
-  thingName: string,
-  iface: string,
-  description: string,
-): Promise<ShadowDocument> {
-  return http(
-    `/devices/${encodeURIComponent(thingName)}/interfaces/${encodeURIComponent(iface)}/description`,
-    { method: 'PUT', body: JSON.stringify({ description }) },
-  );
-}
-
-export function submitCommand(thingName: string, command: string): Promise<{ command_id: string }> {
-  return http(`/devices/${encodeURIComponent(thingName)}/commands`, {
+export function submitTask(thingName: string, command: string): Promise<{ task_id: string }> {
+  return http(`/devices/${encodeURIComponent(thingName)}/tasks`, {
     method: 'POST',
     body: JSON.stringify({ command }),
   });
 }
 
-export function getCommand(commandId: string): Promise<Command> {
-  return http(`/commands/${encodeURIComponent(commandId)}`);
-}
-
-export function listCommands(thingName: string): Promise<{ commands: Command[] }> {
-  return http(`/devices/${encodeURIComponent(thingName)}/commands`);
+export function getTask(thingName: string, taskId: string): Promise<Task> {
+  return http(`/devices/${encodeURIComponent(thingName)}/tasks/${encodeURIComponent(taskId)}`);
 }

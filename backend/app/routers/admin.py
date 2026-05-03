@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from auth import pwd_context
-from db import device_groups_table, groups_table
+from db import devices_table, groups_table
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -18,7 +18,7 @@ class GroupCreate(BaseModel):
 
 
 class DeviceRegister(BaseModel):
-    thing_name: str
+    dev_id: str  # MAC address, e.g. "deadbeef0101"
 
 
 @router.post("/groups", status_code=201)
@@ -42,11 +42,24 @@ def create_group(body: GroupCreate) -> dict[str, str]:
 def register_device(group_id: str, body: DeviceRegister) -> dict[str, str]:
     if not groups_table().get_item(Key={"group_id": group_id}).get("Item"):
         raise HTTPException(status_code=404, detail="Group not found")
+
+    thing_name = f"{group_id}:{body.dev_id}"
+
+    existing = devices_table().get_item(
+        Key={"group_id": group_id, "dev_id": body.dev_id}
+    ).get("Item")
+    if existing:
+        return {
+            "thing_name": thing_name,
+            "api_key": str(existing["api_key"]),
+        }
+
     api_key = str(uuid.uuid4())
-    device_groups_table().put_item(Item={
-        "thing_name": body.thing_name,
+    devices_table().put_item(Item={
         "group_id": group_id,
+        "dev_id": body.dev_id,
+        "thing_name": thing_name,
         "api_key": api_key,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"thing_name": body.thing_name, "api_key": api_key}
+    return {"thing_name": thing_name, "api_key": api_key}

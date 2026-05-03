@@ -16,99 +16,76 @@ AWS IoT Core を使ったネットワーク機器リモート制御のデモ。A
 
 ## ディレクトリ
 
-- [`device/`](./device/) — 仮想ネットワーク機器 (Python, AWS IoT Device SDK v2)
-- [`backend/`](./backend/) — FastAPI (ローカル) / Mangum + Lambda + SAM (デプロイ)
-- [`frontend/`](./frontend/) — React + Vite + TypeScript ダッシュボード
+| パス | 概要 |
+|------|------|
+| `device/` | 仮想ネットワーク機器 (Python, AWS IoT Device SDK v2) |
+| `backend/` | FastAPI (ローカル) / Mangum + Lambda + SAM (デプロイ) |
+| `frontend/` | React + Vite + TypeScript ダッシュボード |
+| `scripts/` | ローカル開発補助スクリプト |
+| `docs/` | 開発ガイド・利用ガイド |
 
-## 前提ツール
+## ドキュメント
 
-- [uv](https://docs.astral.sh/uv/) (Python 依存管理)
-- Node.js 18+ / npm
-- AWS CLI (設定済み)、`jq`、`curl` (`make setup-aws` で使用)
-- (デプロイ時のみ) AWS SAM CLI、Docker
+- [開発ガイド](docs/dev-guide.md) — セットアップ・アーキテクチャ・API リファレンス
+- [利用ガイド](docs/user-guide.md) — UI の使い方
 
-## 起動
+## クイックスタート
 
-ルート Makefile から `concurrently` 経由でまとめて起動します。Python venv (`device/.venv`, `backend/.venv`)、`frontend/node_modules`、`node_modules` (concurrently)、`device/config.json` (AWS IoT 接続情報) が揃っている必要があります。
+### ローカル開発（推奨）
+
+AWS IoT は本物を使いつつ、DynamoDB は Floci（LocalStack 互換）でローカルエミュレーションします。
 
 ```bash
-# 初回セットアップ
-make install        # 3 つの依存 + ルートの concurrently をインストール
-make setup-aws      # AWS IoT Thing/Cert/Policy を作成 (device/config.json を生成)
+# 前提ツールのインストール確認: uv, Node.js 18+, AWS CLI (設定済み), jq, curl, Docker
 
-# 同時起動 (Ctrl+C で全停止)
-make dev
+# 1. 依存インストール
+make install
+
+# 2. AWS IoT Thing/証明書を作成（初回のみ）
+make setup-aws
+
+# 3. ローカル DynamoDB + 全プロセスを起動
+#    初回は自動でデバイス初期化(init-local)が実行されます
+make dev-local
 ```
 
-ブラウザで http://localhost:5173 を開く。
+ブラウザで http://localhost:5173 を開く。ログイン: `group_id=dev-group` / `group_pw=devpass`
 
-### 単体起動 / その他
+### AWS 環境（実 DynamoDB）
 
 ```bash
-make dev-device     # 仮想デバイスのみ
-make dev-backend    # FastAPI のみ
-make dev-frontend   # Vite のみ
+make install
+make setup-aws
+make dev            # 全プロセスを同時起動
+```
+
+## よく使うコマンド
+
+```bash
+make dev-local      # Floci + 全プロセス起動（ローカル開発）
+make dev            # 全プロセス起動（AWS DynamoDB 使用）
+make init-local     # ローカルデバイス初期化（手動再実行用）
+make stop-local     # Floci を停止してデータを破棄
+make dev-device     # 仮想デバイスのみ起動
+make dev-backend    # FastAPI のみ起動
+make dev-frontend   # Vite のみ起動
 make help           # 全ターゲット一覧
 make clean          # venv / node_modules / ビルド成果物を削除
 ```
-
-## 制御フロー
-
-UI でトグル → `PATCH /devices/{thing}/shadow` または `POST .../enable|disable`
-→ FastAPI が boto3 で `iot-data:UpdateThingShadow` を呼ぶ
-→ AWS IoT が delta を仮想デバイスに publish
-→ デバイスが state を更新して `reported` を publish
-→ UI のポーリングで反映を確認
-
-## ローカル開発の注意点
-
-### ポート
-
-| 用途 | ポート | 競合しがちな相手 |
-| --- | --- | --- |
-| Vite (frontend) | 5173 | — |
-| FastAPI (backend) | **9001** | 8000 は他プロジェクトの Docker と衝突しがち、8021 は macOS の launchd が予約 (FreeSWITCH ESL 等) |
-
-ポートが既に使われていると次のような症状になります：
-
-- `HTTP 404: {"detail":"Not Found"}` — 別の FastAPI/HTTP サーバが先に LISTEN している (中身が違う)
-- `[Errno 48] address already in use` — uvicorn 起動失敗
-- `Connection reset by peer` — launchd 予約ポートに接続したが対応サービスが起動していない
-
-調査コマンド:
-
-```bash
-lsof -iTCP:9001 -sTCP:LISTEN -n -P    # IPv4/IPv6 両方の LISTEN を表示
-netstat -anv -p tcp | grep 9001        # launchd 予約は lsof に出ないことがあるので併用
-docker ps --format 'table {{.Names}}\t{{.Ports}}' | grep 9001
-```
-
-ポートを変える場合は **3 箇所**を揃える必要があります:
-
-- `Makefile` の `dev` / `dev-backend` ターゲット (`--port`)
-- `frontend/vite.config.ts` の proxy `target` のデフォルト
-- (任意) `backend/README.md` のサンプル curl
-
-### Ctrl+C で確実にプロセスを終わらせる
-
-`make dev` は `concurrently` で 3 プロセスを束ねていますが、各コマンドは内部的に `sh -c "..."` 経由で起動されます。素朴に書くと sh が SIGTERM を子に伝播せず、Ctrl+C 後に `virtual_device.py` 等が**孤児**として残ります。同じ `client_id` で再接続すると AWS IoT が duplicate を検出して接続を切るため、`AWS_ERROR_MQTT_UNEXPECTED_HANGUP` の再接続ループが発生します。
-
-対策として Makefile の各コマンドは `cd <dir> && exec <cmd>` の形で書き、sh をプロセス置換しています。これにより concurrently → uv/npm → 子プロセスの親子関係が直結し、SIGTERM が確実に届きます。
-
-それでも前回の取り残しが残っていた場合の確認・後始末:
-
-```bash
-ps aux | grep -E 'virtual_device|uvicorn|vite' | grep -v grep
-pkill -f virtual_device.py        # 必要なら -9 で強制
-```
-
-`AWS_ERROR_MQTT_UNEXPECTED_HANGUP` がトグル操作と無関係に断続的に出るときは、まず `virtual_device.py` が二重起動していないか確認してください。
 
 ## デプロイ
 
 ```bash
 make backend-build    # uv export → sam build (ZIP)
-make backend-deploy   # 上記 + sam deploy (初回は backend/ で sam deploy --guided)
+make backend-deploy   # 上記 + sam deploy
 ```
 
-詳細は `backend/README.md` 参照。
+詳細は [開発ガイド](docs/dev-guide.md) の「デプロイ」セクションを参照。
+
+## ポート
+
+| 用途 | ポート |
+|------|--------|
+| React (Vite) | 5173 |
+| FastAPI (uvicorn) | 9001 |
+| Floci (DynamoDB) | 4566 |

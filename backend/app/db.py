@@ -10,8 +10,8 @@ import boto3
 LOCALSTACK_ENDPOINT = os.environ.get("LOCALSTACK_ENDPOINT")
 
 TABLE_GROUPS = os.environ.get("TABLE_GROUPS", "Groups")
-TABLE_DEVICE_GROUPS = os.environ.get("TABLE_DEVICE_GROUPS", "DeviceGroups")
-TABLE_COMMANDS = os.environ.get("TABLE_COMMANDS", "Commands")
+TABLE_DEVICES = os.environ.get("TABLE_DEVICES", "Devices")
+TABLE_TASKS = os.environ.get("TABLE_TASKS", "Tasks")
 
 
 @lru_cache(maxsize=1)
@@ -23,9 +23,9 @@ def groups_table():
     return _resource().Table(TABLE_GROUPS)
 
 
-def device_groups_table():
-    return _resource().Table(TABLE_DEVICE_GROUPS)
+def devices_table():
+    return _resource().Table(TABLE_DEVICES)
 
 
-def commands_table():
-    return _resource().Table(TABLE_COMMANDS)
+def tasks_table():
+    return _resource().Table(TABLE_TASKS)

@@ -21,8 +21,9 @@ logger = logging.getLogger("virtual_device")
 
 
 class VirtualDevice:
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any], config_path: Path | None = None):
         self.config = config
+        self._config_path = config_path
         self.thing_name: str = config["thing_name"]
         self.client_id: str = config.get("client_id", self.thing_name)
         self.backend_url: str = config.get("backend_url", "http://localhost:9001")
@@ -131,25 +132,36 @@ class VirtualDevice:
     def _on_command_notify(self, topic, payload, **_kwargs):
         try:
             data = json.loads(payload)
-            command_id = data.get("command_id")
+            task_id = data.get("task_id")
         except Exception:
             logger.warning("Invalid command notification payload: %r", payload)
             return
 
-        if not command_id:
+        if not task_id:
             return
 
-        if not self.api_key:
-            logger.warning("api_key not configured; ignoring command %s", command_id)
+        api_key = self.api_key
+        if not api_key and self._config_path is not None:
+            try:
+                fresh = json.loads(self._config_path.read_text())
+                api_key = fresh.get("api_key", "")
+                if api_key:
+                    self.api_key = api_key
+                    self.backend_url = fresh.get("backend_url", self.backend_url)
+            except Exception:
+                pass
+
+        if not api_key:
+            logger.warning("api_key not configured; ignoring task %s", task_id)
             return
 
         if not self._cmd_lock.acquire(blocking=False):
-            logger.warning("Command %s ignored: another command is running", command_id)
+            logger.warning("Task %s ignored: another command is running", task_id)
             return
 
         def _run():
             try:
-                fetch_and_execute(command_id, self.backend_url, self.api_key)
+                fetch_and_execute(task_id, self.backend_url, api_key)
             finally:
                 self._cmd_lock.release()
 
@@ -230,7 +242,7 @@ def main() -> None:
         raise SystemExit(f"Config not found: {config_path}")
 
     config = json.loads(config_path.read_text())
-    device = VirtualDevice(config)
+    device = VirtualDevice(config, config_path=config_path)
 
     def _handle_signal(signum, _frame):
         logger.info("Signal %s received, stopping...", signum)

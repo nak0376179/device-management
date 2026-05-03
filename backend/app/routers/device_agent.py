@@ -4,39 +4,44 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Key
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from db import commands_table, device_groups_table
+from db import devices_table, tasks_table
 
 router = APIRouter(prefix="/api/device", tags=["device-agent"])
 
 COMMAND_TIMEOUT_SEC = int(os.environ.get("COMMAND_TIMEOUT_SEC", "30"))
 
 
-def _thing_name_from_api_key(api_key: str) -> str:
-    resp = device_groups_table().scan(FilterExpression=Attr("api_key").eq(api_key))
+def _device_pk_from_api_key(api_key: str) -> str:
+    resp = devices_table().query(
+        IndexName="api_key-index",
+        KeyConditionExpression=Key("api_key").eq(api_key),
+        Limit=1,
+    )
     items = resp.get("Items", [])
     if not items:
         raise HTTPException(status_code=401, detail="Invalid API key")
-    return str(items[0]["thing_name"])
+    item = items[0]
+    return f"{item['group_id']}#{item['dev_id']}"
 
 
-@router.get("/commands/{command_id}")
-def fetch_command(
-    command_id: str, x_device_api_key: str = Header(...)
+@router.get("/tasks/{task_id:path}")
+def fetch_task(
+    task_id: str, x_device_api_key: str = Header(...)
 ) -> dict[str, Any]:
-    thing_name = _thing_name_from_api_key(x_device_api_key)
-    item = commands_table().get_item(Key={"command_id": command_id}).get("Item")
+    device_pk = _device_pk_from_api_key(x_device_api_key)
+    item = tasks_table().get_item(
+        Key={"device_pk": device_pk, "task_id": task_id}
+    ).get("Item")
     if not item:
-        raise HTTPException(status_code=404, detail="Command not found")
-    if item.get("thing_name") != thing_name:
-        raise HTTPException(status_code=403, detail="Command not for this device")
+        raise HTTPException(status_code=404, detail="Task not found")
 
     now = datetime.now(timezone.utc).isoformat()
-    commands_table().update_item(
-        Key={"command_id": command_id},
+    tasks_table().update_item(
+        Key={"device_pk": device_pk, "task_id": task_id},
         UpdateExpression="SET #s = :s, updated_at = :t",
         ExpressionAttributeNames={"#s": "status"},
         ExpressionAttributeValues={":s": "running", ":t": now},
@@ -51,23 +56,23 @@ class ResultBody(BaseModel):
     duration_ms: int
 
 
-@router.post("/commands/{command_id}/result")
+@router.post("/tasks/{task_id:path}/result")
 def submit_result(
-    command_id: str, body: ResultBody, x_device_api_key: str = Header(...)
+    task_id: str, body: ResultBody, x_device_api_key: str = Header(...)
 ) -> dict[str, str]:
-    thing_name = _thing_name_from_api_key(x_device_api_key)
-    item = commands_table().get_item(Key={"command_id": command_id}).get("Item")
+    device_pk = _device_pk_from_api_key(x_device_api_key)
+    item = tasks_table().get_item(
+        Key={"device_pk": device_pk, "task_id": task_id}
+    ).get("Item")
     if not item:
-        raise HTTPException(status_code=404, detail="Command not found")
-    if item.get("thing_name") != thing_name:
-        raise HTTPException(status_code=403, detail="Command not for this device")
+        raise HTTPException(status_code=404, detail="Task not found")
     if item.get("status") not in ("running", "pending"):
-        raise HTTPException(status_code=409, detail="Command already completed")
+        raise HTTPException(status_code=409, detail="Task already completed")
 
     status = "completed" if body.exit_code == 0 else "failed"
     now = datetime.now(timezone.utc).isoformat()
-    commands_table().update_item(
-        Key={"command_id": command_id},
+    tasks_table().update_item(
+        Key={"device_pk": device_pk, "task_id": task_id},
         UpdateExpression=(
             "SET #s = :s, stdout = :out, stderr = :err, "
             "exit_code = :ec, duration_ms = :dur, updated_at = :t"

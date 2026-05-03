@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { submitCommand } from '../api';
+import { submitTask } from '../api';
 import CommandResult from './CommandResult';
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 
 export default function CommandPanel({ thingName }: Props) {
   const [command, setCommand] = useState('');
-  const [commandIds, setCommandIds] = useState<string[]>([]);
+  const [taskIds, setTaskIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,8 +18,8 @@ export default function CommandPanel({ thingName }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const { command_id } = await submitCommand(thingName, command.trim());
-      setCommandIds((prev) => [command_id, ...prev]);
+      const { task_id } = await submitTask(thingName, command.trim());
+      setTaskIds((prev) => [task_id, ...prev]);
       setCommand('');
     } catch (e) {
       setError(String(e));
@@ -44,8 +44,8 @@ export default function CommandPanel({ thingName }: Props) {
       </form>
       {error && <div className="error">{error}</div>}
       <div className="cmd-history">
-        {commandIds.map((id) => (
-          <CommandResult key={id} commandId={id} />
+        {taskIds.map((id) => (
+          <CommandResult key={id} thingName={thingName} taskId={id} />
         ))}
       </div>
     </section>

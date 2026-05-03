@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Device Management API (FastAPI on Lambda, ZIP package)
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures: [arm64]
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: app/
+      Handler: main.handler
+      PackageType: Zip
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - iot:GetThingShadow
+                - iot:UpdateThingShadow
+              Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/*
+            - Effect: Allow
+              Action:
+                - iot:ListThings
+                - iot:DescribeThing
+              Resource: '*'
+      Events:
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /{proxy+}
+            Method: ANY
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /
+            Method: ANY
+
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: ['*']
+        AllowHeaders: ['*']
+
+Outputs:
+  ApiUrl:
+    Description: HTTP API base URL
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/
+  FunctionName:
+    Value: !Ref ApiFunction

@@ -1,0 +1,11 @@
+[project]
+name = "virtual-device"
+version = "0.1.0"
+description = "Virtual network device that mirrors state via AWS IoT Device Shadow"
+requires-python = ">=3.10"
+dependencies = [
+    "awsiotsdk>=1.21.0",
+]
+
+[tool.uv]
+package = false

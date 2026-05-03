@@ -44,7 +44,6 @@ API_KEY=$(echo "$DEVICE_RESP" | python3 -c "import sys,json; print(json.load(sys
 THING_NAME=$(echo "$DEVICE_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['thing_name'])" 2>/dev/null || true)
 
 # Update device config.json if api_key was returned
-CONFIG="$(dirname "$0")/../device/config.json"
 if [[ -f "$CONFIG" && -n "$API_KEY" ]]; then
   python3 - "$CONFIG" "$API_KEY" "$THING_NAME" "$BACKEND_URL" <<'PY'
 import sys, json

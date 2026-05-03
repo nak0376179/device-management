@@ -30,7 +30,7 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function login(group_id: string, group_pw: string): Promise<void> {
+export async function login(group_id: string, group_pw: string): Promise<string> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,6 +39,7 @@ export async function login(group_id: string, group_pw: string): Promise<void> {
   if (!res.ok) throw new Error('認証に失敗しました');
   const { token } = await res.json();
   localStorage.setItem('jwt', token);
+  return token;
 }
 
 export function listDevices(): Promise<{ devices: Device[] }> {

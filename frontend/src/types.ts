@@ -6,6 +6,10 @@ export interface Device {
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
+export function isTerminal(status: TaskStatus): boolean {
+  return status === 'completed' || status === 'failed';
+}
+
 export interface Task {
   device_pk: string;
   task_id: string;

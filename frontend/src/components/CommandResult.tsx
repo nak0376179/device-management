@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTask } from '../api';
+import { isTerminal } from '../types';
 import type { Task } from '../types';
 
 interface Props {
@@ -20,7 +21,7 @@ export default function CommandResult({ thingName, taskId }: Props) {
       try {
         const data = await getTask(thingName, taskId);
         if (!cancelled) setTask(data);
-        if (data.status === 'completed' || data.status === 'failed') return;
+        if (isTerminal(data.status)) return;
         if (!cancelled) setTimeout(poll, POLL_MS);
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -34,7 +35,7 @@ export default function CommandResult({ thingName, taskId }: Props) {
   if (error) return <div className="error">{error}</div>;
   if (!task) return <div className="muted">送信中…</div>;
 
-  const done = task.status === 'completed' || task.status === 'failed';
+  const done = isTerminal(task.status);
   return (
     <div className="cmd-result">
       <div className="cmd-meta">

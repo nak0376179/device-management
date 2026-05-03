@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { login } from '../api';
 
 interface Props {
-  onLogin: () => void;
+  onLogin: (token: string) => void;
 }
 
 export default function LoginForm({ onLogin }: Props) {
@@ -16,8 +16,8 @@ export default function LoginForm({ onLogin }: Props) {
     setLoading(true);
     setError(null);
     try {
-      await login(groupId, groupPw);
-      onLogin();
+      const token = await login(groupId, groupPw);
+      onLogin(token);
     } catch {
       setError('グループIDまたはパスワードが正しくありません');
     } finally {

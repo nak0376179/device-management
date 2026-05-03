@@ -10,8 +10,8 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = () => {
-    setToken(localStorage.getItem('jwt'));
+  const handleLogin = (token: string) => {
+    setToken(token);
   };
 
   const handleLogout = () => {

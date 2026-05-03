@@ -8,22 +8,10 @@ from pydantic import BaseModel
 
 from auth import jwt_bearer
 from db import devices_table
+from device import assert_device_access
 from iot_client import IoTClientError, get_shadow, list_things, update_desired
 
 router = APIRouter(prefix="/api", tags=["devices"])
-
-
-def _assert_device_access(thing_name: str, group_id: str) -> None:
-    # thing_name format: "group_id:dev_id"
-    parts = thing_name.split(":", 1)
-    if len(parts) != 2 or parts[0] != group_id:
-        raise HTTPException(status_code=403, detail="Device not in your group")
-    dev_id = parts[1]
-    item = devices_table().get_item(
-        Key={"group_id": group_id, "dev_id": dev_id}
-    ).get("Item")
-    if not item:
-        raise HTTPException(status_code=403, detail="Device not in your group")
 
 
 def _wrap(fn, *args, **kwargs):
@@ -64,7 +52,7 @@ class DescriptionBody(BaseModel):
 
 @router.get("/devices/{thing_name}/shadow")
 def read_shadow(thing_name: str, group_id: str = Depends(jwt_bearer)) -> dict[str, Any]:
-    _assert_device_access(thing_name, group_id)
+    assert_device_access(thing_name, group_id)
     return _wrap(get_shadow, thing_name)
 
 
@@ -72,7 +60,7 @@ def read_shadow(thing_name: str, group_id: str = Depends(jwt_bearer)) -> dict[st
 def patch_shadow(
     thing_name: str, body: DesiredUpdate, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
-    _assert_device_access(thing_name, group_id)
+    assert_device_access(thing_name, group_id)
     return _wrap(update_desired, thing_name, body.desired)
 
 
@@ -80,7 +68,7 @@ def patch_shadow(
 def enable_interface(
     thing_name: str, iface: str, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
-    _assert_device_access(thing_name, group_id)
+    assert_device_access(thing_name, group_id)
     return _wrap(update_desired, thing_name, {"interfaces": {iface: {"enabled": True}}})
 
 
@@ -88,7 +76,7 @@ def enable_interface(
 def disable_interface(
     thing_name: str, iface: str, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
-    _assert_device_access(thing_name, group_id)
+    assert_device_access(thing_name, group_id)
     return _wrap(update_desired, thing_name, {"interfaces": {iface: {"enabled": False}}})
 
 
@@ -96,5 +84,5 @@ def disable_interface(
 def set_description(
     thing_name: str, iface: str, body: DescriptionBody, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
-    _assert_device_access(thing_name, group_id)
+    assert_device_access(thing_name, group_id)
     return _wrap(update_desired, thing_name, {"interfaces": {iface: {"description": body.description}}})

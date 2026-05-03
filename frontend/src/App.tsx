@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as api from './api';
+import LoginForm from './components/LoginForm';
+import CommandPanel from './components/CommandPanel';
 import type { Device, ShadowDocument } from './types';
 
 const POLL_INTERVAL_MS = 3000;
@@ -19,6 +21,7 @@ function formatBytes(n: number): string {
 }
 
 export default function App() {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('jwt'));
   const [devices, setDevices] = useState<Device[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [shadow, setShadow] = useState<ShadowDocument | null>(null);
@@ -27,7 +30,20 @@ export default function App() {
   const [editingIface, setEditingIface] = useState<string | null>(null);
   const [draftDescription, setDraftDescription] = useState('');
 
+  const handleLogin = () => {
+    setToken(localStorage.getItem('jwt'));
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('jwt');
+    setToken(null);
+    setDevices([]);
+    setSelected(null);
+    setShadow(null);
+  };
+
   useEffect(() => {
+    if (!token) return;
     api
       .listDevices()
       .then((res) => {
@@ -35,10 +51,10 @@ export default function App() {
         setSelected((cur) => cur ?? res.devices[0]?.thingName ?? null);
       })
       .catch((e) => setError(String(e)));
-  }, []);
+  }, [token]);
 
   useEffect(() => {
-    if (!selected) {
+    if (!selected || !token) {
       setShadow(null);
       return;
     }
@@ -60,7 +76,11 @@ export default function App() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [selected]);
+  }, [selected, token]);
+
+  if (!token) {
+    return <LoginForm onLogin={handleLogin} />;
+  }
 
   const reported = shadow?.state.reported;
   const desired = shadow?.state.desired;
@@ -100,12 +120,14 @@ export default function App() {
                 className={selected === d.thingName ? 'selected' : ''}
                 onClick={() => setSelected(d.thingName)}
               >
+                <span className={`dot ${d.connected ? 'online' : 'offline'}`} />
                 {d.thingName}
               </button>
             </li>
           ))}
           {devices.length === 0 && <li className="muted">No devices</li>}
         </ul>
+        <button className="logout-btn" onClick={handleLogout}>ログアウト</button>
       </aside>
 
       <main>
@@ -150,9 +172,7 @@ export default function App() {
                     const isEditing = editingIface === name;
                     return (
                       <tr key={name}>
-                        <td>
-                          <code>{name}</code>
-                        </td>
+                        <td><code>{name}</code></td>
                         <td>
                           {isEditing ? (
                             <span className="edit">
@@ -202,6 +222,8 @@ export default function App() {
                 </tbody>
               </table>
             </section>
+
+            <CommandPanel thingName={selected} />
           </>
         )}
 

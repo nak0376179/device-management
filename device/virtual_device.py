@@ -15,6 +15,8 @@ from typing import Any
 from awscrt import io, mqtt
 from awsiot import iotshadow, mqtt_connection_builder
 
+from command_runner import fetch_and_execute
+
 logger = logging.getLogger("virtual_device")
 
 
@@ -23,12 +25,15 @@ class VirtualDevice:
         self.config = config
         self.thing_name: str = config["thing_name"]
         self.client_id: str = config.get("client_id", self.thing_name)
+        self.backend_url: str = config.get("backend_url", "http://localhost:9001")
+        self.api_key: str = config.get("api_key", "")
         self.start_time = time.time()
         self.state_lock = threading.Lock()
         self.state = self._initial_state()
         self.mqtt_connection: mqtt.Connection | None = None
         self.shadow_client: iotshadow.IotShadowClient | None = None
         self._stop = threading.Event()
+        self._cmd_lock = threading.Lock()
 
     def _initial_state(self) -> dict[str, Any]:
         return {
@@ -50,6 +55,10 @@ class VirtualDevice:
         host_resolver = io.DefaultHostResolver(event_loop_group)
         client_bootstrap = io.ClientBootstrap(event_loop_group, host_resolver)
 
+        lwt_payload = json.dumps(
+            {"state": {"reported": {"connected": False}}}
+        ).encode()
+
         self.mqtt_connection = mqtt_connection_builder.mtls_from_path(
             endpoint=self.config["endpoint"],
             cert_filepath=self.config["cert_path"],
@@ -61,6 +70,12 @@ class VirtualDevice:
             keep_alive_secs=30,
             on_connection_interrupted=self._on_interrupted,
             on_connection_resumed=self._on_resumed,
+            will=mqtt.Will(
+                topic=f"$aws/things/{self.thing_name}/shadow/update",
+                payload=lwt_payload,
+                qos=mqtt.QoS.AT_LEAST_ONCE,
+                retain=False,
+            ),
         )
 
         logger.info("Connecting to %s as %s ...", self.config["endpoint"], self.client_id)
@@ -69,15 +84,15 @@ class VirtualDevice:
 
         self.shadow_client = iotshadow.IotShadowClient(self.mqtt_connection)
         self._subscribe_shadow()
-
-        # 初回状態送信
-        self._publish_reported_state()
+        self._subscribe_commands()
+        self._publish_connected(True)
 
     def _on_interrupted(self, connection, error, **_kwargs):
         logger.warning("Connection interrupted: %s", error)
 
     def _on_resumed(self, connection, return_code, session_present, **_kwargs):
         logger.info("Connection resumed: rc=%s session_present=%s", return_code, session_present)
+        self._publish_connected(True)
 
     def _subscribe_shadow(self) -> None:
         assert self.shadow_client is not None
@@ -102,6 +117,44 @@ class VirtualDevice:
 
         logger.info("Subscribed to shadow topics.")
 
+    def _subscribe_commands(self) -> None:
+        assert self.mqtt_connection is not None
+        topic = f"cmd/notify/{self.thing_name}"
+        subscribe_future, _ = self.mqtt_connection.subscribe(
+            topic=topic,
+            qos=mqtt.QoS.AT_LEAST_ONCE,
+            callback=self._on_command_notify,
+        )
+        subscribe_future.result()
+        logger.info("Subscribed to command topic: %s", topic)
+
+    def _on_command_notify(self, topic, payload, **_kwargs):
+        try:
+            data = json.loads(payload)
+            command_id = data.get("command_id")
+        except Exception:
+            logger.warning("Invalid command notification payload: %r", payload)
+            return
+
+        if not command_id:
+            return
+
+        if not self.api_key:
+            logger.warning("api_key not configured; ignoring command %s", command_id)
+            return
+
+        if not self._cmd_lock.acquire(blocking=False):
+            logger.warning("Command %s ignored: another command is running", command_id)
+            return
+
+        def _run():
+            try:
+                fetch_and_execute(command_id, self.backend_url, self.api_key)
+            finally:
+                self._cmd_lock.release()
+
+        threading.Thread(target=_run, daemon=True).start()
+
     def _on_delta_updated(self, delta: iotshadow.ShadowDeltaUpdatedEvent) -> None:
         if not delta.state:
             return
@@ -113,59 +166,37 @@ class VirtualDevice:
         with self.state_lock:
             _deep_merge(self.state, desired)
 
-    def _publish_reported_state(self) -> None:
-        if self._stop.is_set() or self.shadow_client is None:
-            return
+    def _publish_connected(self, connected: bool) -> None:
+        self._publish_reported_state(extra={"connected": connected})
 
+    def _publish_reported_state(self, extra: dict[str, Any] | None = None) -> None:
+        if self._stop.is_set() or self.shadow_client is None or self.mqtt_connection is None:
+            return
         with self.state_lock:
             self.state["system"]["uptime_sec"] = int(time.time() - self.start_time)
             reported = json.loads(json.dumps(self.state))
-
+        if extra:
+            reported.update(extra)
         request = iotshadow.UpdateShadowRequest(
             thing_name=self.thing_name,
             state=iotshadow.ShadowState(reported=reported),
         )
-
-        # ★ 非同期（ここが重要）
         try:
-            self.shadow_client.publish_update_shadow(
-                request, mqtt.QoS.AT_LEAST_ONCE
-            )
+            self.shadow_client.publish_update_shadow(request, mqtt.QoS.AT_LEAST_ONCE)
         except Exception as exc:
             logger.warning("Publish error: %s", exc)
 
-    def run_telemetry_loop(self, interval: float) -> None:
-        logger.info("Telemetry loop started (interval=%.1fs). Ctrl+C to stop.", interval)
-
-        while not self._stop.is_set():
-            if self._stop.wait(interval):
-                break
-
-            with self.state_lock:
-                for iface in self.state["interfaces"].values():
-                    if iface.get("enabled"):
-                        iface["rx_bytes"] += random.randint(1_000, 100_000)
-                        iface["tx_bytes"] += random.randint(1_000, 100_000)
-
-                self.state["system"]["cpu_percent"] = round(random.uniform(2, 30), 1)
-                self.state["system"]["memory_percent"] = round(random.uniform(30, 70), 1)
-
-            if self._stop.is_set():
-                break
-
-            self._publish_reported_state()
-
-        logger.info("Telemetry loop stopped.")
+    def wait_until_stop(self) -> None:
+        logger.info("Waiting for cloud commands. Ctrl+C to stop.")
+        self._stop.wait()
+        logger.info("Stop requested.")
 
     def request_stop(self) -> None:
         self._stop.set()
 
     def stop(self) -> None:
         self._stop.set()
-
-        # 少しだけ待って送信を流す（任意）
         time.sleep(0.2)
-
         conn, self.mqtt_connection = self.mqtt_connection, None
         if conn is not None:
             try:
@@ -186,7 +217,6 @@ def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Virtual network device for AWS IoT demo")
     parser.add_argument("--config", default="config.json")
-    parser.add_argument("--interval", type=float, default=10.0)
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -211,7 +241,7 @@ def main() -> None:
 
     try:
         device.connect()
-        device.run_telemetry_loop(args.interval)
+        device.wait_until_stop()
     finally:
         device.stop()
 

@@ -2,6 +2,8 @@
 
 AWS IoT Core に接続して Device Shadow で状態を同期する仮想ネットワーク機器です。バックエンド (Lambda) や React UI から Shadow の `desired` を更新すると、本スクリプトが受信して反映し、`reported` を返します。
 
+クラウド主導モデル: 起動時の自走通知や周期テレメトリは送りません。`shadow/delta` を受けたときだけ `desired` を反映し、その応答として `reported` を publish します。
+
 ## セットアップ
 
 前提: AWS CLI 設定済み、`jq`, `curl`, [uv](https://docs.astral.sh/uv/) (Python 3.10+)。
@@ -18,7 +20,6 @@ uv sync
 # 3. 起動
 uv run python virtual_device.py              # 通常
 uv run python virtual_device.py -v           # デバッグログ
-uv run python virtual_device.py --interval 5 # テレメトリ間隔(秒)
 ```
 
 リージョンを変える場合は `AWS_REGION=us-west-2 ./setup_aws_iot.sh` のように指定。
@@ -37,8 +38,8 @@ uv run python virtual_device.py --interval 5 # テレメトリ間隔(秒)
 }
 ```
 
-- 制御可能: `hostname`, `interfaces.<name>.enabled`, `interfaces.<name>.description`
-- 読み取り専用 (デバイスが更新): `rx_bytes`, `tx_bytes`, `system.*`
+- 制御可能 (クラウドから `desired` で更新): `hostname`, `interfaces.<name>.enabled`, `interfaces.<name>.description`
+- デバイス由来の値 (`rx_bytes`, `tx_bytes`, `system.*`): 現状はクラウドからの delta 受信時にスナップショットとして reported に乗せて返すのみ。周期テレメトリは送りません。
 
 ## 動作確認 (AWS CLI から)
 

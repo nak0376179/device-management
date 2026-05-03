@@ -68,6 +68,16 @@ POLICY_DOC=$(cat <<EOF
       "Effect": "Allow",
       "Action": ["iot:Subscribe"],
       "Resource": "arn:aws:iot:${REGION}:*:topicfilter/\$aws/things/${THING_NAME}/shadow/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["iot:Subscribe"],
+      "Resource": "arn:aws:iot:${REGION}:*:topicfilter/cmd/notify/${THING_NAME}"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["iot:Receive"],
+      "Resource": "arn:aws:iot:${REGION}:*:topic/cmd/notify/${THING_NAME}"
     }
   ]
 }
@@ -75,7 +85,13 @@ EOF
 )
 
 if aws iot get-policy --policy-name "$POLICY_NAME" --region "$REGION" >/dev/null 2>&1; then
-  echo "Policy already exists: $POLICY_NAME"
+  echo "Updating policy: $POLICY_NAME"
+  aws iot create-policy-version \
+    --policy-name "$POLICY_NAME" \
+    --policy-document "$POLICY_DOC" \
+    --set-as-default \
+    --region "$REGION" >/dev/null
+  echo "Policy updated."
 else
   aws iot create-policy \
     --policy-name "$POLICY_NAME" \
@@ -101,7 +117,9 @@ cat > config.json <<EOF
   "thing_name": "${THING_NAME}",
   "cert_path": "./certs/device.cert.pem",
   "key_path": "./certs/device.private.key",
-  "ca_path": "./certs/AmazonRootCA1.pem"
+  "ca_path": "./certs/AmazonRootCA1.pem",
+  "backend_url": "http://localhost:9001",
+  "api_key": ""
 }
 EOF
 

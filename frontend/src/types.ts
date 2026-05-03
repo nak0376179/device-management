@@ -31,4 +31,21 @@ export interface ShadowDocument {
 export interface Device {
   thingName: string;
   thingTypeName: string | null;
+  connected: boolean;
+}
+
+export type CommandStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface Command {
+  command_id: string;
+  group_id: string;
+  thing_name: string;
+  command: string;
+  status: CommandStatus;
+  stdout: string;
+  stderr: string;
+  exit_code: number | null;
+  duration_ms: number | null;
+  created_at: string;
+  updated_at: string;
 }

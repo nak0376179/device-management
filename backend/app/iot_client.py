@@ -48,6 +48,17 @@ def update_desired(thing_name: str, desired: dict[str, Any]) -> dict[str, Any]:
     return json.loads(resp["payload"].read().decode("utf-8"))
 
 
+def mqtt_publish(topic: str, payload: dict[str, Any]) -> None:
+    try:
+        _iot_data().publish(
+            topic=topic,
+            qos=1,
+            payload=json.dumps(payload).encode(),
+        )
+    except (BotoCoreError, ClientError) as exc:
+        raise IoTClientError(f"mqtt publish failed: {exc}") from exc
+
+
 def list_things(max_results: int = 250) -> list[dict[str, Any]]:
     try:
         resp = _iot().list_things(maxResults=max_results)

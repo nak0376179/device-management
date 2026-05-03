@@ -168,3 +168,151 @@ code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 13px;
 }
+
+/* ── Login ── */
+.login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.login-form {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 32px 40px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-form h2 { margin: 0 0 8px; font-size: 18px; }
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.login-form input {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.login-form button {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.login-form button:disabled { opacity: 0.6; cursor: default; }
+
+/* ── Sidebar extras ── */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.dot.online  { background: #4ade80; }
+.dot.offline { background: #64748b; }
+
+.logout-btn {
+  margin-top: 20px;
+  width: 100%;
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 7px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.logout-btn:hover { background: #334155; color: #e2e8f0; }
+
+/* ── Command panel ── */
+.cmd-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.cmd-form textarea {
+  flex: 1;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.cmd-form button {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cmd-form button:disabled { opacity: 0.6; cursor: default; }
+
+.cmd-history { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+.cmd-result {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.cmd-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+
+.cmd-status {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.cmd-status.pending  { background: #334155; color: #94a3b8; }
+.cmd-status.running  { background: #1d4ed8; color: #bfdbfe; }
+.cmd-status.completed { background: #166534; color: #bbf7d0; }
+.cmd-status.failed   { background: #7f1d1d; color: #fecaca; }
+
+.cmd-output {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  background: #0f172a;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.cmd-output.stderr { color: #f87171; }

@@ -5,6 +5,7 @@ description = "Virtual network device that mirrors state via AWS IoT Device Shad
 requires-python = ">=3.10"
 dependencies = [
     "awsiotsdk>=1.21.0",
+    "botocore[crt]>=1.20.28",
     "requests>=2.31",
 ]
 

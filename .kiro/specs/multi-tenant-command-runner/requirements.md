@@ -7,7 +7,7 @@
 - **任意コマンド実行**: フロントから装置に任意コマンドを投入し、大きなレスポンス (数 MB 想定) を取得できる
 - **MQTT の役割限定**: 装置の常時接続維持とコマンド着信通知のみ MQTT を使い、データ転送は装置側からも HTTPS REST で行う
 
-ローカル検証はすべて Floci (LocalStack 互換 OSS エミュレータ) 上で動かせること。
+ローカル検証はすべて Floci (ローカル AWS エミュレータ) 上で動かせること。
 
 ## Boundary Context
 
@@ -86,7 +86,7 @@
 #### Acceptance Criteria
 
 1. `make dev-local` で Floci (Docker コンテナ, `http://localhost:4566`) を起動し、必要な AWS リソース (DynamoDB テーブル等) を自動作成してから全プロセスを起動すること
-2. `LOCALSTACK_ENDPOINT=http://localhost:4566` 環境変数が設定された場合、boto3 クライアントがすべてその endpoint_url を使うこと
+2. `AWS_ENDPOINT_URL=http://localhost:4566` 環境変数が設定された場合、boto3 クライアントがすべてその endpoint_url を使うこと
 3. 装置側の MQTT は実 AWS IoT Core を使うこと (Floci は IoT Core MQTT を擬似できないため)。DynamoDB 等の REST/DB 系リソースのみ Floci で代替する
 4. `make seed-local` でテスト用グループ (`dev-group` / pw: `devpass`) と装置 (`virtual-device-01`) の紐付けデータを投入できること
 5. Floci の停止・データ破棄は `make stop-local` で行えること

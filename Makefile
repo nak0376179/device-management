@@ -57,18 +57,18 @@ dev-local: ## Floci 起動 → テーブル作成 → 全プロセス起動 (初
 	docker compose up -d
 	@until aws --endpoint-url http://localhost:4566 --region ap-northeast-1 dynamodb list-tables >/dev/null 2>&1; do \
 	  echo "  Waiting for Floci..."; sleep 0.5; done
-	LOCALSTACK_ENDPOINT=http://localhost:4566 bash scripts/setup-floci.sh
+	AWS_ENDPOINT_URL=http://localhost:4566 bash scripts/setup-floci.sh
 	$(CONCURRENTLY) \
 	  --names device,backend,frontend,init \
 	  --prefix-colors blue,green,magenta,yellow \
 	  --kill-others-on-fail \
 	  "cd device && exec uv run python virtual_device.py" \
-	  "cd backend && LOCALSTACK_ENDPOINT=http://localhost:4566 exec uv run uvicorn --app-dir app main:app --reload --port 9001" \
+	  "cd backend && AWS_ENDPOINT_URL=http://localhost:4566 exec uv run uvicorn --app-dir app main:app --reload --port 9001" \
 	  "cd frontend && exec npm run dev" \
-	  "LOCALSTACK_ENDPOINT=http://localhost:4566 BACKEND_URL=http://localhost:9001 bash scripts/init-local.sh"
+	  "AWS_ENDPOINT_URL=http://localhost:4566 BACKEND_URL=http://localhost:9001 bash scripts/init-local.sh"
 
 init-local: ## ローカル開発用グループ・デバイスを初期化 (初回のみ必要)
-	LOCALSTACK_ENDPOINT=http://localhost:4566 BACKEND_URL=http://localhost:9001 bash scripts/init-local.sh
+	AWS_ENDPOINT_URL=http://localhost:4566 BACKEND_URL=http://localhost:9001 bash scripts/init-local.sh
 
 stop-local: ## Floci を停止してデータを破棄
 	docker compose down -v

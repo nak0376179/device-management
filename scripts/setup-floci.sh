@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Create DynamoDB tables in Floci (LocalStack-compatible endpoint).
+# Create DynamoDB tables in Floci (local AWS emulator on port 4566).
 set -euo pipefail
 
-ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localhost:4566}"
+ENDPOINT="${AWS_ENDPOINT_URL:-http://localhost:4566}"
 AWS="aws --endpoint-url $ENDPOINT --region ap-northeast-1"
 
 echo "Using endpoint: $ENDPOINT"

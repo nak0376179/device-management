@@ -59,7 +59,7 @@ device-management/
 ├── scripts/
 │   ├── setup-floci.sh         # DynamoDB テーブル作成（Floci 用）
 │   └── init-local.sh          # ローカルデバイス初期化（グループ・デバイス登録）
-├── docker-compose.yml         # Floci（LocalStack 互換 DynamoDB）
+├── docker-compose.yml         # Floci（ローカル DynamoDB エミュレータ）
 └── Makefile                   # 開発コマンド集約
 ```
 
@@ -276,7 +276,7 @@ make backend-deploy   # sam deploy
 | `TABLE_GROUPS` | Groups テーブル名（デフォルト: `Groups`） |
 | `TABLE_DEVICES` | Devices テーブル名（デフォルト: `Devices`） |
 | `TABLE_TASKS` | Tasks テーブル名（デフォルト: `Tasks`） |
-| `LOCALSTACK_ENDPOINT` | ローカル開発時のエンドポイント（本番は未設定） |
+| `AWS_ENDPOINT_URL` | ローカル開発時の Floci エンドポイント（本番は未設定） |
 | `COMMAND_TIMEOUT_SEC` | コマンドタイムアウト秒数（デフォルト: 30） |
 
 ---
@@ -308,7 +308,7 @@ pkill -f virtual_device.py
 ### Floci が起動していない
 
 ```bash
-docker ps | grep localstack
+docker ps | grep floci
 docker compose up -d
 ```
 

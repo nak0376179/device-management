@@ -4,7 +4,7 @@
 # Skips automatically if config.json already has api_key.
 set -euo pipefail
 
-ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localhost:4566}"
+ENDPOINT="${AWS_ENDPOINT_URL:-http://localhost:4566}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:9001}"
 CONFIG="$(dirname "$0")/../device/config.json"
 AWS="aws --endpoint-url $ENDPOINT --region ap-northeast-1"

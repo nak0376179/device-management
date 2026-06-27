@@ -311,7 +311,7 @@ class JWTBearer(HTTPBearer):
 import os, boto3
 from functools import lru_cache
 
-ENDPOINT = os.environ.get("LOCALSTACK_ENDPOINT")  # None → 実 AWS
+ENDPOINT = os.environ.get("AWS_ENDPOINT_URL")  # None → 実 AWS
 
 @lru_cache(maxsize=1)
 def ddb():

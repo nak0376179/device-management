@@ -3,7 +3,7 @@
 ## Task 1: 永続化基盤
 
 - [x] 1.1 `backend/app/db.py` — DynamoDB クライアントヘルパー
-  - `LOCALSTACK_ENDPOINT` 環境変数が設定されている場合のみ `endpoint_url` を渡す
+  - `AWS_ENDPOINT_URL` 環境変数が設定されている場合のみ `endpoint_url` を渡す
   - `@lru_cache` でクライアントをシングルトン化
   - `groups_table()` / `device_groups_table()` / `commands_table()` の 3 ヘルパーを提供
   - _Requirements: 6_
@@ -151,7 +151,7 @@
 
 - [x] 10.1 `scripts/setup-floci.sh` — DynamoDB テーブル作成
   - `Groups`, `DeviceGroups` (GSI: group_id-index), `Commands` (GSI: thing_name-created-index, TTL: ttl 属性) を aws cli で作成
-  - `LOCALSTACK_ENDPOINT` が未設定の場合はエラー終了
+  - `AWS_ENDPOINT_URL` が未設定の場合はエラー終了
   - _Requirements: 6.1, 6.2_
 
 - [x] 10.2 `scripts/seed-local.sh` — テストデータ投入

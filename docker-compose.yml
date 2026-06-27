@@ -1,15 +1,22 @@
+# Local AWS for WSL2 / Linux — the official Floci emulator, in Docker.
+#
+# Floci listens on the same port 4566 the app already expects
+# (AWS_ENDPOINT_URL=http://localhost:4566), so no application code changes are
+# needed. DynamoDB runs in-process inside Floci, so the Docker socket is NOT
+# required here (it is only needed for container-backed services like Lambda).
 services:
   floci:
-    # Floci: LocalStack-compatible free AWS emulator (https://github.com/floci-io/floci)
-    # Drop-in compatible with localstack/localstack image at port 4566
-    image: localstack/localstack:latest
+    image: floci/floci:latest
+    container_name: device-management-floci
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=dynamodb
-      - DEBUG=0
+      - FLOCI_HOSTNAME=floci
+      # Persist seeded data across restarts (default is in-memory/ephemeral).
+      - FLOCI_STORAGE_MODE=persistent
+      - FLOCI_STORAGE_PERSISTENT_PATH=/data
     volumes:
-      - floci-data:/var/lib/localstack
+      - floci-data:/data
 
 volumes:
   floci-data:

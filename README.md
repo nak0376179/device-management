@@ -33,7 +33,7 @@ AWS IoT Core を使ったネットワーク機器リモート制御のデモ。A
 
 ### ローカル開発（推奨）
 
-AWS IoT は本物を使いつつ、DynamoDB は Floci（LocalStack 互換）でローカルエミュレーションします。
+AWS IoT は本物を使いつつ、DynamoDB は Floci でローカルエミュレーションします。
 
 ```bash
 # 前提ツールのインストール確認: uv, Node.js 18+, AWS CLI (設定済み), jq, curl, Docker

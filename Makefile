@@ -3,7 +3,7 @@
         dev-local init-local stop-local \
         backend-docs-export backend-export backend-build backend-deploy clean
 
-CONCURRENTLY := ./node_modules/.bin/concurrently
+CONCURRENTLY := pnpm exec concurrently
 
 help: ## このヘルプを表示
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -17,16 +17,16 @@ install-backend: ## backend/ の依存 (dev 含む) を uv で同期
 	cd backend && uv sync
 
 install-frontend: ## frontend/ の依存をインストール
-	cd frontend && npm install
+	cd frontend && pnpm install
 
 install-root: ## ルートの依存 (concurrently) をインストール
-	npm install
+	pnpm install
 
 setup-aws: ## AWS IoT の Thing/Cert/Policy を作成 (初回のみ)
 	cd device && ./setup_aws_iot.sh
 
 dev: ## device, backend, frontend を同時起動 (Ctrl+C で全停止)
-	@test -x $(CONCURRENTLY) || { echo "First run: make install-root"; exit 1; }
+	@pnpm exec concurrently --version >/dev/null 2>&1 || { echo "First run: make install-root"; exit 1; }
 	@test -d device/.venv || { echo "First run: make install-device"; exit 1; }
 	@test -d backend/.venv || { echo "First run: make install-backend"; exit 1; }
 	@test -d frontend/node_modules || { echo "First run: make install-frontend"; exit 1; }
@@ -37,7 +37,7 @@ dev: ## device, backend, frontend を同時起動 (Ctrl+C で全停止)
 	  --kill-others \
 	  "cd device && PYTHONUNBUFFERED=1 exec uv run python -u virtual_device.py" \
 	  "cd backend && PYTHONUNBUFFERED=1 exec uv run uvicorn --app-dir app main:app --reload --port 9001 --log-config log_config.json" \
-	  "cd frontend && exec npm run dev"
+	  "cd frontend && exec pnpm dev"
 
 dev-device: ## device 単体起動
 	cd device && uv run python virtual_device.py
@@ -46,14 +46,14 @@ dev-backend: ## backend 単体起動
 	cd backend && uv run uvicorn --app-dir app main:app --reload --port 9001 --log-config log_config.json
 
 dev-frontend: ## frontend 単体起動
-	cd frontend && npm run dev
+	cd frontend && pnpm dev
 
 # Floci accepts any credentials; dummies keep local dev independent of a real
 # (or expired) AWS profile. DynamoDB + IoT Core both run inside Floci.
 LOCAL_ENV := AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=ap-northeast-1
 
 dev-local: ## Floci(DynamoDB+IoT) 起動 → 自動プロビジョニング → 全プロセス起動 (実 AWS 不要)
-	@test -x $(CONCURRENTLY) || { echo "First run: make install-root"; exit 1; }
+	@pnpm exec concurrently --version >/dev/null 2>&1 || { echo "First run: make install-root"; exit 1; }
 	@test -d device/.venv || { echo "First run: make install-device"; exit 1; }
 	@test -d backend/.venv || { echo "First run: make install-backend"; exit 1; }
 	@test -d frontend/node_modules || { echo "First run: make install-frontend"; exit 1; }
@@ -67,7 +67,7 @@ dev-local: ## Floci(DynamoDB+IoT) 起動 → 自動プロビジョニング → 
 	  --kill-others-on-fail \
 	  "cd device && PYTHONUNBUFFERED=1 exec uv run python -u virtual_device.py" \
 	  "cd backend && $(LOCAL_ENV) PYTHONUNBUFFERED=1 exec uv run uvicorn --app-dir app main:app --reload --port 9001 --log-config log_config.json" \
-	  "cd frontend && exec npm run dev" \
+	  "cd frontend && exec pnpm dev" \
 	  "$(LOCAL_ENV) BACKEND_URL=http://localhost:9001 bash scripts/init-local.sh"
 
 init-local: ## ローカル開発用グループ・デバイス・IoT Thing を初期化 (dev-local が自動実行)

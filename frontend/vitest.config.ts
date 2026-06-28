@@ -4,28 +4,45 @@ import { playwright } from '@vitest/browser-playwright';
 import tailwindcss from '@tailwindcss/vite';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 
-// Runs every Storybook story as a component test in a real browser (chromium via
-// Playwright): each story is smoke-tested for render errors and its `play`
-// function (if any) is executed. See https://storybook.js.org/docs/writing-tests
+const alias = { '@': fileURLToPath(new URL('./src', import.meta.url)) };
+
+// Two test projects run under one `vitest`:
+//
+//   unit       — fast Node tests for pure logic (src/**/*.test.ts).
+//   storybook  — every Storybook story rendered in a real browser (chromium via
+//                Playwright); stories with a `play` function are also driven as
+//                interaction tests. See https://storybook.js.org/docs/writing-tests
+//
+// Run all: `npm test`. One project: `vitest run --project unit`.
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-    storybookTest({
-      configDir: fileURLToPath(new URL('./.storybook', import.meta.url)),
-    }),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-  },
   test: {
-    name: 'storybook',
-    browser: {
-      enabled: true,
-      provider: playwright(),
-      headless: true,
-      instances: [{ browser: 'chromium' }],
-    },
+    projects: [
+      {
+        resolve: { alias },
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        },
+      },
+      {
+        plugins: [
+          tailwindcss(),
+          storybookTest({
+            configDir: fileURLToPath(new URL('./.storybook', import.meta.url)),
+          }),
+        ],
+        resolve: { alias },
+        test: {
+          name: 'storybook',
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            headless: true,
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      },
+    ],
   },
 });

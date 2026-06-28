@@ -1,22 +1,20 @@
 # Local AWS for WSL2 / Linux — the official Floci emulator, in Docker.
 #
-# Floci listens on the same port 4566 the app already expects
-# (AWS_ENDPOINT_URL=http://localhost:4566), so no application code changes are
-# needed. DynamoDB runs in-process inside Floci, so the Docker socket is NOT
-# required here (it is only needed for container-backed services like Lambda).
+# Floci serves the AWS control/data plane on 4566 and — since 1.5.28 — an
+# AWS IoT Core-compatible MQTT broker on 1883. The whole stack the app needs
+# (DynamoDB + IoT Core: registry, Device Shadow, MQTT pub/sub) runs in-process,
+# so no real AWS account is required for local development.
+#
+# Storage is left at Floci's default `memory` mode: the IoT broker process runs
+# as a non-root user that cannot write the mounted volume, and `make dev-local`
+# re-provisions (tables + group/device/thing + config.json) idempotently on each
+# start, so persistence buys nothing here and only adds permission-denied noise.
 services:
   floci:
     image: floci/floci:latest
     container_name: device-management-floci
     ports:
-      - "4566:4566"
+      - "4566:4566" # AWS control/data plane (DynamoDB, IoT registry/shadow, ...)
+      - "1883:1883" # IoT Core MQTT broker (plain MQTT; lazily started on first IoT use)
     environment:
       - FLOCI_HOSTNAME=floci
-      # Persist seeded data across restarts (default is in-memory/ephemeral).
-      - FLOCI_STORAGE_MODE=persistent
-      - FLOCI_STORAGE_PERSISTENT_PATH=/data
-    volumes:
-      - floci-data:/data
-
-volumes:
-  floci-data:

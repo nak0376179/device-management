@@ -78,45 +78,46 @@ make install
 #   npm install  (concurrently)
 ```
 
-### 2. AWS IoT 準備（初回のみ）
+### 2. ローカル起動（実 AWS 不要）
 
 ```bash
-make setup-aws
+make dev-local
+```
+
+DynamoDB も IoT Core も Floci でエミュレートするため、`make setup-aws` や AWS 認証情報は不要です（実 AWS にデプロイ／接続する場合のみ後述の `setup-aws` を使用）。
+
+内部の処理順序：
+
+1. `docker compose up -d` — Floci（DynamoDB + IoT Core）起動。`:4566`(REST) と `:1883`(MQTT) を公開
+2. `scripts/setup-floci.sh` — DynamoDB テーブル作成（冪等）
+3. `concurrently` で device / backend / frontend / init を並列起動。`init` = `scripts/init-local.sh`
+4. backend には `AWS_ENDPOINT_URL`＋ダミー認証(`test/test`)＋region を渡す（boto3 を Floci に向ける）
+
+`init-local.sh`（冪等・毎回実行）が行うこと：
+- `POST /api/admin/groups` — グループ `dev-group` 登録
+- `POST /api/admin/groups/dev-group/devices` — デバイス `deadbeef0101` 登録（→ `api_key`）
+- `iot create-thing` — Floci IoT レジストリに Thing 作成（デバイス一覧は DynamoDB ∩ `iot:ListThings`）
+- `device/config.json` を生成（`local:true`, `endpoint:localhost`, `mqtt_port:1883`, `thing_name`, `client_id`, `api_key`, `backend_url`）
+
+Floci は既定で in-memory のため、`make dev-local` 起動ごとに上記が冪等に再プロビジョニングされます。デバイス（仮想機器）はプロビジョニング完了まで config を待機し、IoT MQTT ブローカ起動まで接続をリトライします。
+
+> **デバイスの MQTT 接続（ローカル）**: Floci の IoT MQTT ブローカは平文 MQTT(:1883) なので、
+> デバイスは mTLS ではなく平文 MQTT で接続します（証明書不要）。`config.json` の `local:true`
+> で分岐し、実 AWS 向けの mTLS 経路はそのまま残ります。
+
+### 3. AWS IoT 準備（実 AWS にデプロイ／接続する場合のみ）
+
+```bash
+make setup-aws      # 要: AWS 認証情報, jq, curl
 ```
 
 以下が作成されます：
 - AWS IoT Thing: `dev-group:deadbeef0101`
 - 証明書・秘密鍵: `device/certs/`
 - IoT ポリシー: `dev-group-deadbeef0101-policy`
-- `device/config.json`（endpoint, cert パスを含む）
+- `device/config.json`（endpoint, cert パスを含む実 AWS 用設定）
 
 > AWS CLI が `ap-northeast-1` で設定されている必要があります。別リージョンを使う場合は `AWS_REGION=us-east-1 make setup-aws` のように指定してください。
-
-### 3. ローカル起動
-
-```bash
-make dev-local
-```
-
-内部の処理順序：
-
-1. `docker compose up -d` — Floci（DynamoDB エミュレータ）起動
-2. `scripts/setup-floci.sh` — テーブル作成（冪等、既存時はスキップ）
-3. `device/config.json` の `api_key` をチェック — 未設定なら `init-local.sh` を実行
-4. `concurrently` で device / backend / frontend を並列起動
-
-**初回のみ** `init-local.sh` が実行され、以下が行われます：
-- `POST /api/admin/groups` — グループ `dev-group` 登録
-- `POST /api/admin/groups/dev-group/devices` — デバイス `deadbeef0101` 登録
-- `device/config.json` に `api_key`, `thing_name`, `backend_url` を書き込み
-
-2 回目以降は `api_key` が書き込み済みのためスキップされます。再初期化が必要な場合：
-
-```bash
-make stop-local   # Floci データ破棄
-# device/config.json の api_key を空文字に戻す
-make dev-local    # 再初期化が自動実行される
-```
 
 または `make init-local` で手動実行（バックエンドが起動済みの状態で）。
 
@@ -276,7 +277,9 @@ make backend-deploy   # sam deploy
 | `TABLE_GROUPS` | Groups テーブル名（デフォルト: `Groups`） |
 | `TABLE_DEVICES` | Devices テーブル名（デフォルト: `Devices`） |
 | `TABLE_TASKS` | Tasks テーブル名（デフォルト: `Tasks`） |
-| `AWS_ENDPOINT_URL` | ローカル開発時の Floci エンドポイント（本番は未設定） |
+| `AWS_ENDPOINT_URL` | 設定時は Floci ローカルモード（DynamoDB/IoT を Floci に向け、MQTT publish と Shadow 読取をローカルブリッジ経由にする）。本番は未設定 |
+| `FLOCI_MQTT_HOST` | ローカルモードで backend が通知を publish する MQTT ブローカのホスト（既定: `AWS_ENDPOINT_URL` のホスト→`localhost`） |
+| `FLOCI_MQTT_PORT` | 同ポート（既定: `1883`） |
 | `COMMAND_TIMEOUT_SEC` | コマンドタイムアウト秒数（デフォルト: 30） |
 
 ---

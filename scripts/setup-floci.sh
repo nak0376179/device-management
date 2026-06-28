@@ -3,7 +3,12 @@
 set -euo pipefail
 
 ENDPOINT="${AWS_ENDPOINT_URL:-http://localhost:4566}"
-AWS="aws --endpoint-url $ENDPOINT --region ap-northeast-1"
+# Floci accepts any credentials; default to dummies so this works without a
+# configured (or expired) real AWS profile.
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
+export AWS_REGION="${AWS_REGION:-ap-northeast-1}"
+AWS="aws --endpoint-url $ENDPOINT --region $AWS_REGION"
 
 echo "Using endpoint: $ENDPOINT"
 

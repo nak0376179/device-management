@@ -1,5 +1,5 @@
 .PHONY: help install install-device install-backend install-frontend install-root \
-        setup-aws dev dev-device dev-backend dev-frontend \
+        setup-aws show-aws dev dev-device dev-backend dev-frontend \
         dev-local init-local stop-local \
         backend-docs-export backend-export backend-build backend-deploy clean
 
@@ -22,8 +22,35 @@ install-frontend: ## frontend/ の依存をインストール
 install-root: ## ルートの依存 (concurrently) をインストール
 	pnpm install
 
-setup-aws: ## AWS IoT の Thing/Cert/Policy を作成 (初回のみ)
+setup-aws: ## AWS IoT の Thing/Cert/Policy/デバイス登録を作成 (冪等)
 	cd device && ./setup_aws_iot.sh
+
+AWS_REGION ?= ap-northeast-1
+
+show-aws: ## AWS デプロイ状況を表示 (CDK スタック / IoT / DynamoDB)
+	@echo "=== CloudFormation Stack ==="
+	@aws cloudformation describe-stacks --stack-name InfraStack --region $(AWS_REGION) \
+	  --query "Stacks[0].{Status:StackStatus,Updated:LastUpdatedTime,Created:CreationTime}" \
+	  --output table 2>/dev/null || echo "  InfraStack: not deployed"
+	@echo ""
+	@echo "=== DynamoDB Tables ==="
+	@aws dynamodb list-tables --region $(AWS_REGION) \
+	  --query "TableNames[?@=='Groups' || @=='Devices' || @=='Tasks']" \
+	  --output table 2>/dev/null
+	@echo ""
+	@echo "=== IoT Endpoint ==="
+	@aws iot describe-endpoint --endpoint-type iot:Data-ATS --region $(AWS_REGION) \
+	  --query endpointAddress --output text 2>/dev/null || echo "  (取得失敗)"
+	@echo ""
+	@echo "=== Groups ==="
+	@aws dynamodb scan --table-name Groups --region $(AWS_REGION) \
+	  --query "Items[].{group_id:group_id.S,created_at:created_at.S}" \
+	  --output table 2>/dev/null || echo "  (テーブルなし)"
+	@echo ""
+	@echo "=== Devices ==="
+	@aws dynamodb scan --table-name Devices --region $(AWS_REGION) \
+	  --query "Items[].{group_id:group_id.S,dev_id:dev_id.S,thing_name:thing_name.S,created_at:created_at.S}" \
+	  --output table 2>/dev/null || echo "  (テーブルなし)"
 
 dev: ## device, backend, frontend を同時起動 (Ctrl+C で全停止)
 	@pnpm exec concurrently --version >/dev/null 2>&1 || { echo "First run: make install-root"; exit 1; }

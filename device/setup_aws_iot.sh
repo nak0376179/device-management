@@ -10,6 +10,11 @@ SAFE_NAME="${THING_NAME//:/-}"
 POLICY_NAME="${SAFE_NAME}-policy"
 CLIENT_ID="${SAFE_NAME}"
 CERT_DIR="./certs"
+TABLE_DEVICES="${TABLE_DEVICES:-Devices}"
+
+# Derive group_id and dev_id from thing_name (format: group_id:dev_id)
+GROUP_ID="${THING_NAME%%:*}"
+DEV_ID="${THING_NAME#*:}"
 
 mkdir -p "$CERT_DIR"
 
@@ -90,6 +95,15 @@ EOF
 
 if aws iot get-policy --policy-name "$POLICY_NAME" --region "$REGION" >/dev/null 2>&1; then
   echo "Updating policy: $POLICY_NAME"
+  # Delete non-default versions to stay under the 5-version limit.
+  aws iot list-policy-versions --policy-name "$POLICY_NAME" --region "$REGION" \
+    --query "policyVersions[?isDefaultVersion==\`false\`].versionId" --output text \
+    | tr '\t' '\n' | while read -r vid; do
+        [[ -z "$vid" ]] && continue
+        aws iot delete-policy-version \
+          --policy-name "$POLICY_NAME" --policy-version-id "$vid" \
+          --region "$REGION" >/dev/null
+      done
   aws iot create-policy-version \
     --policy-name "$POLICY_NAME" \
     --policy-document "$POLICY_DOC" \
@@ -114,6 +128,32 @@ aws iot attach-thing-principal \
   --principal "$CERT_ARN" \
   --region "$REGION"
 
+# Register device in DynamoDB and get (or create) api_key.
+EXISTING=$(aws dynamodb get-item \
+  --table-name "$TABLE_DEVICES" \
+  --key "{\"group_id\":{\"S\":\"${GROUP_ID}\"},\"dev_id\":{\"S\":\"${DEV_ID}\"}}" \
+  --region "$REGION" \
+  --query "Item.api_key.S" --output text 2>/dev/null || true)
+
+if [[ -n "$EXISTING" && "$EXISTING" != "None" ]]; then
+  API_KEY="$EXISTING"
+  echo "Device already registered: api_key=$API_KEY"
+else
+  API_KEY=$(python3 -c "import uuid; print(uuid.uuid4())")
+  NOW=$(python3 -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).isoformat())")
+  aws dynamodb put-item \
+    --table-name "$TABLE_DEVICES" \
+    --region "$REGION" \
+    --item "{
+      \"group_id\":  {\"S\":\"${GROUP_ID}\"},
+      \"dev_id\":    {\"S\":\"${DEV_ID}\"},
+      \"thing_name\":{\"S\":\"${THING_NAME}\"},
+      \"api_key\":   {\"S\":\"${API_KEY}\"},
+      \"created_at\":{\"S\":\"${NOW}\"}
+    }" >/dev/null
+  echo "Registered device in DynamoDB: api_key=$API_KEY"
+fi
+
 cat > config.json <<EOF
 {
   "endpoint": "${ENDPOINT}",
@@ -123,10 +163,10 @@ cat > config.json <<EOF
   "key_path": "./certs/device.private.key",
   "ca_path": "./certs/AmazonRootCA1.pem",
   "backend_url": "http://localhost:9001",
-  "api_key": ""
+  "api_key": "${API_KEY}"
 }
 EOF
 
 echo
 echo "Setup complete. config.json written."
-echo "Next: pip install -r requirements.txt && python virtual_device.py"
+echo "  group_id=$GROUP_ID  dev_id=$DEV_ID  api_key=$API_KEY"

@@ -5,11 +5,12 @@
 1. [前提ツール](#前提ツール)
 2. [プロジェクト構成](#プロジェクト構成)
 3. [ローカル開発環境のセットアップ](#ローカル開発環境のセットアップ)
-4. [アーキテクチャ詳細](#アーキテクチャ詳細)
-5. [API リファレンス](#api-リファレンス)
-6. [DynamoDB スキーマ](#dynamodb-スキーマ)
-7. [デプロイ](#デプロイ)
-8. [トラブルシューティング](#トラブルシューティング)
+4. [実 AWS 環境のセットアップ](#実-aws-環境のセットアップ)
+5. [アーキテクチャ詳細](#アーキテクチャ詳細)
+6. [API リファレンス](#api-リファレンス)
+7. [DynamoDB スキーマ](#dynamodb-スキーマ)
+8. [デプロイ](#デプロイ)
+9. [トラブルシューティング](#トラブルシューティング)
 
 ---
 
@@ -128,6 +129,120 @@ make setup-aws      # 要: AWS 認証情報, jq, curl
 | http://localhost:5173 | React ダッシュボード |
 | http://localhost:9001/docs | FastAPI Swagger UI |
 | http://localhost:9001/healthz | ヘルスチェック |
+
+---
+
+## 実 AWS 環境のセットアップ
+
+ローカル（Floci）を使わず、実 DynamoDB + 実 IoT Core で動かす手順です。
+テスト・検証目的での利用を想定しています。
+
+### 前提
+
+- AWS CLI が設定済みで `ap-northeast-1` にアクセスできること
+- CDK Bootstrap が対象アカウント/リージョンに完了していること（未実施なら `cd infra && npx cdk bootstrap`）
+- `jq`, `curl` がインストールされていること
+
+### 1. 依存インストール
+
+```bash
+make install
+```
+
+### 2. DynamoDB テーブルを CDK で作成
+
+`infra/` に CDK スタック（`InfraStack`）があります。3 テーブルをすべて PAY_PER_REQUEST で作成します。
+
+```bash
+cd infra
+npx cdk deploy
+cd ..
+```
+
+作成されるテーブル：
+
+| テーブル名 | PK | SK | GSI |
+|------------|----|----|-----|
+| `Groups` | `group_id` | — | — |
+| `Devices` | `group_id` | `dev_id` | `api_key-index`（PK: `api_key`） |
+| `Tasks` | `device_pk` | `task_id` | — |
+
+> テーブルを削除したい場合は `npx cdk destroy`。`removalPolicy: DESTROY` が設定されているため、スタック削除時にテーブルも削除されます。
+
+### 3. バックエンドを起動してグループを登録
+
+バックエンドが起動している必要があります（まだ起動していない場合）。
+
+```bash
+make dev-backend   # 別ターミナルで起動したままにする
+```
+
+admin API 経由でグループを登録します（bcrypt ハッシュ化はサーバ側で行われます）。
+
+```bash
+curl -s -X POST http://localhost:9001/api/admin/groups \
+  -H "Content-Type: application/json" \
+  -d '{"group_id":"<グループID>","group_pw":"<パスワード>"}'
+# → {"group_id":"<グループID>"}
+
+curl -s -X POST http://localhost:9001/api/admin/groups \
+  -H "Content-Type: application/json" \
+  -d '{"group_id":"dev-group","group_pw":"devpass"}'
+```
+
+> **注意**: `group_pw_hash` を直接 DynamoDB に書き込まないでください。パスワードを平文で入れると `KeyError: 'group_pw_hash'` でログインが失敗します。必ず admin API 経由で登録してください。
+
+### 4. IoT Thing・証明書・ポリシー・デバイス登録を一括実行
+
+```bash
+make setup-aws
+```
+
+以下が作成・生成されます：
+
+| 成果物 | 場所 |
+|--------|------|
+| IoT Thing | AWS IoT Core（`dev-group:deadbeef0101`） |
+| デバイス証明書 | `device/certs/device.cert.pem` |
+| 秘密鍵 | `device/certs/device.private.key` |
+| Amazon Root CA | `device/certs/AmazonRootCA1.pem` |
+| IoT ポリシー | AWS IoT Core（`dev-group-deadbeef0101-policy`） |
+| デバイスレコード | DynamoDB `Devices` テーブル（`api_key` を自動生成） |
+| 接続設定 | `device/config.json`（エンドポイント・証明書パス・`api_key` を含む） |
+
+スクリプトは冪等です。再実行した場合、デバイスが既登録なら既存の `api_key` を取得して `config.json` を上書きします。
+
+> Thing 名のデフォルトは `dev-group:deadbeef0101`。別の Thing 名を使う場合は引数で指定します：
+> ```bash
+> cd device && ./setup_aws_iot.sh <group_id>:<dev_id>
+> ```
+
+### 5. 全プロセスを起動
+
+```bash
+make dev
+```
+
+デバイスが実 AWS IoT Core に mTLS 接続し、ブラウザから http://localhost:5173 でログイン・コマンド実行ができます。
+
+### セットアップ後の状態まとめ
+
+```
+AWS リージョン: ap-northeast-1
+DynamoDB テーブル: Groups / Devices / Tasks（InfraStack）
+IoT Thing:         dev-group:deadbeef0101
+IoT ポリシー:      dev-group-deadbeef0101-policy
+ログイン:          group_id=dev-group / group_pw=<設定したパスワード>
+デバイス:          dev_id=deadbeef0101
+```
+
+### クリーンアップ
+
+```bash
+cd infra && npx cdk destroy     # DynamoDB テーブル削除
+```
+
+IoT Thing・証明書・ポリシーは CDK スタック外のリソースなので、必要に応じて AWS コンソールまたは CLI で手動削除してください。
 
 ---
 

@@ -2,3 +2,10 @@ node_modules/
 .DS_Store
 .mypy_cache/
 package-lock.json
+
+# デバイス証明書・接続設定（秘密鍵・api_key を含む）
+device/certs/
+device/config.json
+
+# CDK ビルド成果物
+infra/cdk.out/

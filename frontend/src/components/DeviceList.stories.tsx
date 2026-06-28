@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import { DeviceList } from "@/components/DeviceList";
 import type { Device } from "@/types";
@@ -43,4 +44,19 @@ export const Empty: Story = {
       <DeviceList devices={[]} selected={null} onSelect={() => {}} />
     </div>
   ),
+};
+
+// Interaction test: clicking a row calls onSelect with that device's thingName.
+export const Interactive: Story = {
+  args: { devices: DEVICES, selected: DEVICES[0].thingName, onSelect: fn() },
+  render: (args) => (
+    <div className="w-60">
+      <DeviceList {...args} />
+    </div>
+  ),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByText(DEVICES[1].thingName));
+    await expect(args.onSelect).toHaveBeenCalledWith(DEVICES[1].thingName);
+  },
 };

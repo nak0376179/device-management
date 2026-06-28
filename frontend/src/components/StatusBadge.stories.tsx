@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -13,9 +14,16 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Pending: Story = { args: { status: "pending" } };
-export const Running: Story = { args: { status: "running" } };
 export const Completed: Story = { args: { status: "completed" } };
 export const Failed: Story = { args: { status: "failed" } };
+
+// Interaction test: the running badge renders its Japanese label.
+export const Running: Story = {
+  args: { status: "running" },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("実行中")).toBeInTheDocument();
+  },
+};
 
 export const AllStatuses: Story = {
   render: () => (

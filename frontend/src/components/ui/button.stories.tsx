@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn, userEvent, within } from "storybook/test";
 import { Play, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -58,4 +59,15 @@ export const WithIcon: Story = {
       </Button>
     </div>
   ),
+};
+
+// Interaction test: clicking the button fires onClick exactly once. Runs as a
+// component test under `npm test` (storybook project).
+export const Clickable: Story = {
+  args: { children: "クリック", onClick: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "クリック" }));
+    await expect(args.onClick).toHaveBeenCalledOnce();
+  },
 };

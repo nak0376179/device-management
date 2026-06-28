@@ -1,18 +1,24 @@
 # device-management
 
-AWS IoT Core を使ったネットワーク機器リモート制御のデモ。AWS IoT 以外（仮想デバイス・API・UI）はローカル PC で完結します。
+AWS IoT Core を使ったネットワーク機器リモート制御のデモ。ローカル開発では **DynamoDB も IoT Core も Floci でエミュレート**し、実 AWS なしで完結します（本番は実 AWS にデプロイ）。
 
 ```
-┌─────────────┐  MQTT/TLS  ┌──────────────┐  HTTPS  ┌──────────┐  HTTP  ┌──────────┐
-│  Virtual    │ ─────────▶ │ AWS IoT Core │ ◀─────  │ FastAPI  │ ◀───── │  React   │
-│  Device     │ ◀───────── │ (Shadow)     │ ─────▶  │ (boto3)  │ ─────▶ │  (Vite)  │
-│  (Python)   │   Shadow   │              │         │ uvicorn  │  REST  │  :5173   │
+┌─────────────┐  MQTT      ┌──────────────┐  HTTPS  ┌──────────┐  HTTP  ┌──────────┐
+│  Virtual    │ ─────────▶ │  IoT Core    │ ◀─────  │ FastAPI  │ ◀───── │  React   │
+│  Device     │ ◀───────── │  (Shadow)    │ ─────▶  │ (boto3)  │ ─────▶ │  (Vite)  │
+│  (Python)   │   Shadow   │ 実AWS / Floci│         │ uvicorn  │  REST  │  :5173   │
 └─────────────┘   delta    └──────────────┘         │  :9001   │        └──────────┘
                                                     └──────────┘
                                                        │ sam build && sam deploy
                                                        ▼
                                                Lambda(ZIP) + HTTP API
 ```
+
+> **ローカルの IoT 配線について**: Floci 1.5.28 は IoT Core を含みますが、REST 面と
+> MQTT 面が分離しており、実 IoT Core が持つ REST↔MQTT ブリッジがありません。そのため
+> ローカルモード（`AWS_ENDPOINT_URL` 設定時）に限り、backend はコマンド通知を Floci の
+> MQTT ブローカ(:1883)へ直接 publish し、デバイス状態は Floci の生 REST Shadow から読みます。
+> 本番（実 AWS）の経路は従来どおり boto3 / mTLS のまま変更ありません。
 
 ## ディレクトリ
 
@@ -33,30 +39,28 @@ AWS IoT Core を使ったネットワーク機器リモート制御のデモ。A
 
 ### ローカル開発（推奨）
 
-AWS IoT は本物を使いつつ、DynamoDB は Floci でローカルエミュレーションします。
+DynamoDB も IoT Core も Floci でエミュレートします。**実 AWS アカウント・認証情報は不要**です。
 
 ```bash
-# 前提ツールのインストール確認: uv, Node.js 18+, AWS CLI (設定済み), jq, curl, Docker
+# 前提ツールのインストール確認: uv, Node.js 20+, AWS CLI, Docker
+#   （AWS CLI は Floci 操作にのみ使用。実 AWS 認証は不要）
 
 # 1. 依存インストール
 make install
 
-# 2. AWS IoT Thing/証明書を作成（初回のみ）
-make setup-aws
-
-# 3. ローカル DynamoDB + 全プロセスを起動
-#    初回は自動でデバイス初期化(init-local)が実行されます
+# 2. Floci(DynamoDB + IoT) 起動 → 自動プロビジョニング → 全プロセス起動
+#    グループ/デバイス/IoT Thing/config.json は dev-local が冪等に自動生成します
 make dev-local
 ```
 
 ブラウザで http://localhost:5173 を開く。ログイン: `group_id=dev-group` / `group_pw=devpass`
 
-### AWS 環境（実 DynamoDB）
+### AWS 環境（実 DynamoDB + 実 IoT Core）
 
 ```bash
 make install
-make setup-aws
-make dev            # 全プロセスを同時起動
+make setup-aws      # 実 AWS IoT の Thing/証明書/Policy を作成（AWS 認証情報 + jq, curl が必要）
+make dev            # 全プロセスを同時起動（実 AWS へ接続）
 ```
 
 ## よく使うコマンド
@@ -88,4 +92,5 @@ make backend-deploy   # 上記 + sam deploy
 |------|--------|
 | React (Vite) | 5173 |
 | FastAPI (uvicorn) | 9001 |
-| Floci (DynamoDB) | 4566 |
+| Floci (DynamoDB + IoT REST) | 4566 |
+| Floci IoT MQTT ブローカ | 1883 |

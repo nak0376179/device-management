@@ -14,7 +14,7 @@
 
 - JWT によるグループ認証でテナント間の装置アクセスを分離する
 - MQTT はオンライン保持とコマンド着信通知 (command_id のみ) に限定し、コマンド本体・結果は HTTPS REST で転送する
-- DynamoDB を永続化バックエンドとして追加し、ローカルでは Floci で代替する (IoT Core は実 AWS を継続使用)
+- DynamoDB を永続化バックエンドとして追加し、ローカルでは Floci で代替する。IoT Core もローカルでは Floci (1.5.28+) で代替（REST↔MQTT ブリッジ欠如をローカルモード限定のブリッジで補う）。本番は実 AWS
 
 ### Non-Goals
 

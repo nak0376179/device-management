@@ -59,27 +59,48 @@ class VirtualDevice:
         lwt_payload = json.dumps(
             {"state": {"reported": {"connected": False}}}
         ).encode()
-
-        self.mqtt_connection = mqtt_connection_builder.mtls_from_path(
-            endpoint=self.config["endpoint"],
-            cert_filepath=self.config["cert_path"],
-            pri_key_filepath=self.config["key_path"],
-            ca_filepath=self.config["ca_path"],
-            client_bootstrap=client_bootstrap,
-            client_id=self.client_id,
-            clean_session=True,
-            keep_alive_secs=30,
-            on_connection_interrupted=self._on_interrupted,
-            on_connection_resumed=self._on_resumed,
-            will=mqtt.Will(
-                topic=f"$aws/things/{self.thing_name}/shadow/update",
-                payload=lwt_payload,
-                qos=mqtt.QoS.AT_LEAST_ONCE,
-                retain=False,
-            ),
+        will = mqtt.Will(
+            topic=f"$aws/things/{self.thing_name}/shadow/update",
+            payload=lwt_payload,
+            qos=mqtt.QoS.AT_LEAST_ONCE,
+            retain=False,
         )
 
-        logger.info("Connecting to %s as %s ...", self.config["endpoint"], self.client_id)
+        if self.config.get("local"):
+            # Floci's IoT Core MQTT broker speaks plain MQTT on port 1883 (no TLS,
+            # no client certificates), so connect over a plaintext socket instead
+            # of the mTLS path used against real AWS IoT Core.
+            host = self.config.get("endpoint", "localhost")
+            port = int(self.config.get("mqtt_port", 1883))
+            client = mqtt.Client(client_bootstrap)  # no TLS context → plaintext
+            self.mqtt_connection = mqtt.Connection(
+                client=client,
+                host_name=host,
+                port=port,
+                client_id=self.client_id,
+                clean_session=True,
+                keep_alive_secs=30,
+                on_connection_interrupted=self._on_interrupted,
+                on_connection_resumed=self._on_resumed,
+                will=will,
+            )
+        else:
+            host = self.config["endpoint"]
+            self.mqtt_connection = mqtt_connection_builder.mtls_from_path(
+                endpoint=host,
+                cert_filepath=self.config["cert_path"],
+                pri_key_filepath=self.config["key_path"],
+                ca_filepath=self.config["ca_path"],
+                client_bootstrap=client_bootstrap,
+                client_id=self.client_id,
+                clean_session=True,
+                keep_alive_secs=30,
+                on_connection_interrupted=self._on_interrupted,
+                on_connection_resumed=self._on_resumed,
+                will=will,
+            )
+
+        logger.info("Connecting to %s as %s ...", host, self.client_id)
         self.mqtt_connection.connect().result()
         logger.info("Connected.")
 
@@ -238,6 +259,13 @@ def main() -> None:
     )
 
     config_path = Path(args.config)
+    # Under `make dev-local` the device starts concurrently with provisioning,
+    # so config.json may not exist yet — wait for it rather than exiting.
+    for _ in range(240):  # ~120s
+        if config_path.exists():
+            break
+        logger.info("Waiting for %s (provisioning) ...", config_path)
+        time.sleep(0.5)
     if not config_path.exists():
         raise SystemExit(f"Config not found: {config_path}")
 
@@ -252,8 +280,17 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
 
     try:
-        device.connect()
-        device.wait_until_stop()
+        # The IoT MQTT broker starts lazily on first IoT use, so retry the
+        # initial connect until it accepts us (or we're asked to stop).
+        while not device._stop.is_set():
+            try:
+                device.connect()
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Connect failed (%s); retrying in 2s ...", exc)
+                device._stop.wait(2)
+        if not device._stop.is_set():
+            device.wait_until_stop()
     finally:
         device.stop()
 

@@ -14,9 +14,13 @@ dependencies = [
 ]
 
 [dependency-groups]
+# Local-dev only. httpx + paho-mqtt back the Floci IoT local bridge in
+# iot_client.py (lazy-imported, only when AWS_ENDPOINT_URL is set), so they are
+# never bundled into the production Lambda.
 dev = [
     "uvicorn[standard]>=0.27",
     "httpx",
+    "paho-mqtt>=2.1.0",
 ]
 
 [tool.uv]

@@ -87,6 +87,6 @@
 
 1. `make dev-local` で Floci (Docker コンテナ, `http://localhost:4566`) を起動し、必要な AWS リソース (DynamoDB テーブル等) を自動作成してから全プロセスを起動すること
 2. `AWS_ENDPOINT_URL=http://localhost:4566` 環境変数が設定された場合、boto3 クライアントがすべてその endpoint_url を使うこと
-3. 装置側の MQTT は実 AWS IoT Core を使うこと (Floci は IoT Core MQTT を擬似できないため)。DynamoDB 等の REST/DB 系リソースのみ Floci で代替する
+3. ローカルでは IoT Core も Floci (1.5.28+) で代替し、実 AWS なしで完結すること。Floci は REST 面と MQTT 面が分離しブリッジが無いため、ローカルモード限定で backend はコマンド通知を Floci の MQTT ブローカ(:1883)へ直接 publish し、装置状態は Floci の生 REST Shadow から読む。装置は平文 MQTT(:1883) で接続する。本番は実 AWS IoT Core (boto3 / mTLS) をそのまま使う
 4. `make seed-local` でテスト用グループ (`dev-group` / pw: `devpass`) と装置 (`virtual-device-01`) の紐付けデータを投入できること
 5. Floci の停止・データ破棄は `make stop-local` で行えること

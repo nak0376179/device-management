@@ -11,7 +11,7 @@ from db import devices_table
 from device import assert_device_access
 from iot_client import IoTClientError, get_shadow, list_things, update_desired
 
-router = APIRouter(prefix="/api", tags=["devices"])
+router = APIRouter(prefix="/api", tags=["デバイス"])
 
 
 def _wrap(fn, *args, **kwargs):
@@ -21,7 +21,7 @@ def _wrap(fn, *args, **kwargs):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/devices")
+@router.get("/devices", summary="デバイス一覧")
 def list_devices(group_id: str = Depends(jwt_bearer)) -> dict[str, Any]:
     resp = devices_table().query(
         KeyConditionExpression=Key("group_id").eq(group_id),
@@ -50,13 +50,13 @@ class DescriptionBody(BaseModel):
     description: str
 
 
-@router.get("/devices/{thing_name}/shadow")
+@router.get("/devices/{thing_name}/shadow", summary="Shadow 取得")
 def read_shadow(thing_name: str, group_id: str = Depends(jwt_bearer)) -> dict[str, Any]:
     assert_device_access(thing_name, group_id)
     return _wrap(get_shadow, thing_name)
 
 
-@router.patch("/devices/{thing_name}/shadow")
+@router.patch("/devices/{thing_name}/shadow", summary="Shadow 更新（desired マージ）")
 def patch_shadow(
     thing_name: str, body: DesiredUpdate, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
@@ -64,7 +64,7 @@ def patch_shadow(
     return _wrap(update_desired, thing_name, body.desired)
 
 
-@router.post("/devices/{thing_name}/interfaces/{iface}/enable")
+@router.post("/devices/{thing_name}/interfaces/{iface}/enable", summary="インターフェース有効化")
 def enable_interface(
     thing_name: str, iface: str, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
@@ -72,7 +72,7 @@ def enable_interface(
     return _wrap(update_desired, thing_name, {"interfaces": {iface: {"enabled": True}}})
 
 
-@router.post("/devices/{thing_name}/interfaces/{iface}/disable")
+@router.post("/devices/{thing_name}/interfaces/{iface}/disable", summary="インターフェース無効化")
 def disable_interface(
     thing_name: str, iface: str, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
@@ -80,7 +80,7 @@ def disable_interface(
     return _wrap(update_desired, thing_name, {"interfaces": {iface: {"enabled": False}}})
 
 
-@router.put("/devices/{thing_name}/interfaces/{iface}/description")
+@router.put("/devices/{thing_name}/interfaces/{iface}/description", summary="インターフェース説明変更")
 def set_description(
     thing_name: str, iface: str, body: DescriptionBody, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:

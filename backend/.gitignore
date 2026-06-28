@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 samconfig.toml
 packaged.yaml
+openapi.json

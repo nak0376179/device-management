@@ -15,6 +15,7 @@ Routes:
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,8 +24,24 @@ from mangum import Mangum
 from routers import admin, auth, device_agent, devices, tasks
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Device Management API", version="0.3.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    host = "http://localhost:9001"
+    logger.info("Swagger UI : %s/docs", host)
+    logger.info("ReDoc      : %s/redoc", host)
+    logger.info("OpenAPI    : %s/openapi.json", host)
+    yield
+
+
+app = FastAPI(
+    title="デバイス管理 API",
+    version="0.3.0",
+    description="IoT デバイスの管理・操作・タスク実行を行う REST API",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +51,7 @@ app.add_middleware(
 )
 
 
-@app.get("/healthz")
+@app.get("/healthz", summary="ヘルスチェック", tags=["システム"])
 def healthz() -> dict[str, bool]:
     return {"ok": True}
 

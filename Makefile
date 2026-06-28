@@ -1,7 +1,7 @@
 .PHONY: help install install-device install-backend install-frontend install-root \
         setup-aws dev dev-device dev-backend dev-frontend \
         dev-local init-local stop-local \
-        backend-export backend-build backend-deploy clean
+        backend-docs-export backend-export backend-build backend-deploy clean
 
 CONCURRENTLY := ./node_modules/.bin/concurrently
 
@@ -35,15 +35,15 @@ dev: ## device, backend, frontend を同時起動 (Ctrl+C で全停止)
 	  --names device,backend,frontend \
 	  --prefix-colors blue,green,magenta \
 	  --kill-others \
-	  "cd device && exec uv run python virtual_device.py" \
-	  "cd backend && exec uv run uvicorn --app-dir app main:app --reload --port 9001" \
+	  "cd device && PYTHONUNBUFFERED=1 exec uv run python -u virtual_device.py" \
+	  "cd backend && PYTHONUNBUFFERED=1 exec uv run uvicorn --app-dir app main:app --reload --port 9001 --log-config log_config.json" \
 	  "cd frontend && exec npm run dev"
 
 dev-device: ## device 単体起動
 	cd device && uv run python virtual_device.py
 
 dev-backend: ## backend 単体起動
-	cd backend && uv run uvicorn --app-dir app main:app --reload --port 9001
+	cd backend && uv run uvicorn --app-dir app main:app --reload --port 9001 --log-config log_config.json
 
 dev-frontend: ## frontend 単体起動
 	cd frontend && npm run dev
@@ -65,8 +65,8 @@ dev-local: ## Floci(DynamoDB+IoT) 起動 → 自動プロビジョニング → 
 	  --names device,backend,frontend,init \
 	  --prefix-colors blue,green,magenta,yellow \
 	  --kill-others-on-fail \
-	  "cd device && exec uv run python virtual_device.py" \
-	  "cd backend && $(LOCAL_ENV) exec uv run uvicorn --app-dir app main:app --reload --port 9001" \
+	  "cd device && PYTHONUNBUFFERED=1 exec uv run python -u virtual_device.py" \
+	  "cd backend && $(LOCAL_ENV) PYTHONUNBUFFERED=1 exec uv run uvicorn --app-dir app main:app --reload --port 9001 --log-config log_config.json" \
 	  "cd frontend && exec npm run dev" \
 	  "$(LOCAL_ENV) BACKEND_URL=http://localhost:9001 bash scripts/init-local.sh"
 
@@ -75,6 +75,12 @@ init-local: ## ローカル開発用グループ・デバイス・IoT Thing を�
 
 stop-local: ## Floci を停止してデータを破棄
 	docker compose down -v
+
+backend-docs-export: ## OpenAPI spec を backend/openapi.json に出力 (ReDoc 等で活用)
+	cd backend && uv run python -c \
+	  "import json, sys; sys.path.insert(0, 'app'); from main import app; print(json.dumps(app.openapi(), ensure_ascii=False, indent=2))" \
+	  > openapi.json
+	@echo "→ backend/openapi.json に出力しました"
 
 backend-export: ## backend/app/requirements.txt を pyproject から再生成 (SAM ビルド用)
 	cd backend && uv export --no-hashes --no-dev --no-emit-project --format requirements-txt -o app/requirements.txt

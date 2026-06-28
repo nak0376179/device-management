@@ -12,7 +12,7 @@ from db import tasks_table
 from device import assert_device_access
 from iot_client import IoTClientError, mqtt_publish
 
-router = APIRouter(prefix="/api", tags=["tasks"])
+router = APIRouter(prefix="/api", tags=["タスク"])
 
 _TTL_DAYS = 7
 
@@ -21,7 +21,7 @@ class TaskRequest(BaseModel):
     command: str
 
 
-@router.post("/devices/{thing_name}/tasks", status_code=201)
+@router.post("/devices/{thing_name}/tasks", status_code=201, summary="タスク投入")
 def submit_task(
     thing_name: str, body: TaskRequest, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, str]:
@@ -53,7 +53,7 @@ def submit_task(
     return {"task_id": now_iso}
 
 
-@router.get("/devices/{thing_name}/tasks/{task_id:path}")
+@router.get("/devices/{thing_name}/tasks/{task_id:path}", summary="タスク取得")
 def get_task(
     thing_name: str, task_id: str, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:
@@ -66,7 +66,7 @@ def get_task(
     return item
 
 
-@router.get("/devices/{thing_name}/tasks")
+@router.get("/devices/{thing_name}/tasks", summary="タスク一覧")
 def list_tasks(
     thing_name: str, group_id: str = Depends(jwt_bearer)
 ) -> dict[str, Any]:

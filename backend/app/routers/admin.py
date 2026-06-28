@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from auth import pwd_context
 from db import devices_table, groups_table
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["管理"])
 
 
 class GroupCreate(BaseModel):
@@ -21,7 +21,7 @@ class DeviceRegister(BaseModel):
     dev_id: str  # MAC address, e.g. "deadbeef0101"
 
 
-@router.post("/groups", status_code=201)
+@router.post("/groups", status_code=201, summary="グループ作成")
 def create_group(body: GroupCreate) -> dict[str, str]:
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -38,7 +38,7 @@ def create_group(body: GroupCreate) -> dict[str, str]:
     return {"group_id": body.group_id}
 
 
-@router.post("/groups/{group_id}/devices", status_code=201)
+@router.post("/groups/{group_id}/devices", status_code=201, summary="デバイス登録")
 def register_device(group_id: str, body: DeviceRegister) -> dict[str, str]:
     if not groups_table().get_item(Key={"group_id": group_id}).get("Item"):
         raise HTTPException(status_code=404, detail="Group not found")

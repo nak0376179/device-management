@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from db import devices_table, tasks_table
 from device import make_device_pk
 
-router = APIRouter(prefix="/api/device", tags=["device-agent"])
+router = APIRouter(prefix="/api/device", tags=["デバイスエージェント"])
 
 COMMAND_TIMEOUT_SEC = int(os.environ.get("COMMAND_TIMEOUT_SEC", "30"))
 
@@ -30,7 +30,7 @@ def _device_pk_from_api_key(api_key: str) -> str:
     return make_device_pk(item["group_id"], item["dev_id"])
 
 
-@router.get("/tasks/{task_id:path}")
+@router.get("/tasks/{task_id:path}", summary="タスク受取（デバイス用）")
 def fetch_task(
     task_id: str, x_device_api_key: str = Header(...)
 ) -> dict[str, Any]:
@@ -59,7 +59,7 @@ class ResultBody(BaseModel):
     duration_ms: int
 
 
-@router.post("/tasks/{task_id:path}/result")
+@router.post("/tasks/{task_id:path}/result", summary="実行結果送信（デバイス用）")
 def submit_result(
     task_id: str, body: ResultBody, x_device_api_key: str = Header(...)
 ) -> dict[str, str]:
